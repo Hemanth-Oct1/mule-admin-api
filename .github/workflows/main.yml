@@ -54,7 +54,7 @@ jobs:
     - uses: actions/download-artifact@v3
       with:
         name: artifacts
-    - name: Deploy to Sandbox
+    - name: Deploy to Dev
       env:
         USERNAME: ${{ secrets.CONNECTED_APP_CLIENT_ID }}
         PASSWORD: ${{ secrets.CONNECTED_APP_CLIENT_SECRET }}
