@@ -2,7 +2,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>com.mycompany</groupId>
+	<groupId>a62f6236-0b02-4e5f-a8eb-dc5e37aedb12</groupId>
 	<artifactId>cicd</artifactId>
 	<version>1.0.0</version>
 	<packaging>mule-application</packaging>
@@ -30,22 +30,27 @@
 				<version>${mule.maven.plugin.version}</version>
 				<extensions>true</extensions>
 				<configuration>
-					<cloudHubDeployment>
+					<cloudhub2Deployment>
 						<uri>https://anypoint.mulesoft.com</uri>
+						<provider>MC</provider>
 						<muleVersion>4.4.0</muleVersion>
-						<connectedAppClientId>${anypoint.username}</connectedAppClientId>
-						<connectedAppClientSecret>${anypoint.password}</connectedAppClientSecret>
-						<connectedAppGrantType>client_credentials</connectedAppGrantType>
+						<server>anypoint-exchange-v3</server>
 						<businessGroupId>${anypoint.businessGroup}</businessGroupId>
 						<environment>${env}</environment>
-						<region>us-east-2</region>
-						<workers>1</workers>
-						<workerType>MICRO</workerType>
+						<target>DemoSpace</target>
+						<applicationName>${appname}</applicationName>
+						<replicas>1</replicas>
+						<vCores>0.1</vCores>
+						<deploymentSettings>
+        						<lastMileSecurity>false</lastMileSecurity>
+        						<forwardSslSession>false</forwardSslSession>
+        						<generateDefaultPublicUrl>false</generateDefaultPublicUrl>
+    						</deploymentSettings>
 						<properties>
 							<anypoint.platform.client_id>${anypoint.platform.client_id}</anypoint.platform.client_id>
 							<anypoint.platform.client_secret>${anypoint.platform.client_secret}</anypoint.platform.client_secret>
 						</properties>
-					</cloudHubDeployment>
+					</cloudhub2Deployment>
 					<classifier>mule-application</classifier>
 				</configuration>
 			</plugin>
@@ -66,6 +71,14 @@
 			<classifier>mule-plugin</classifier>
 		</dependency>
 	</dependencies>
+	<distributionManagement>
+        	<repository>
+           		<id>anypoint-exchange-v3</id>
+            		<name>Corporate Repository</name>
+            		<url>https://maven.anypoint.mulesoft.com/api/v3/organizations/${project.groupId}/maven</url>
+            		<layout>default</layout>
+        	</repository>
+    	</distributionManagement>
 
 	<repositories>
 		<repository>
