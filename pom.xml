@@ -2,19 +2,19 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>a62f6236-0b02-4e5f-a8eb-dc5e37aedb12</groupId>
-	<artifactId>mule-admin-api</artifactId>
+	<groupId>com.mycompany</groupId>
+	<artifactId>cicd</artifactId>
 	<version>1.0.0</version>
 	<packaging>mule-application</packaging>
 
-	<name>mule-admin-api-CICD</name>
+	<name>cicd</name>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-		<app.runtime>4.8.0</app.runtime>
-		<mule.maven.plugin.version>4.4.0</mule.maven.plugin.version>
+		<app.runtime>4.9.0</app.runtime>
+		<mule.maven.plugin.version>4.3.0</mule.maven.plugin.version>
 	</properties>
 
 	<build>
@@ -64,49 +64,6 @@
 			<artifactId>mule-sockets-connector</artifactId>
 			<version>1.2.5</version>
 			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>org.mule.modules</groupId>
-			<artifactId>mule-apikit-module</artifactId>
-			<version>1.11.2</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>org.mule.modules</groupId>
-			<artifactId>mule-validation-module</artifactId>
-			<version>2.0.6</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>com.mulesoft.modules</groupId>
-			<artifactId>mule-secure-configuration-property-module</artifactId>
-			<version>1.2.7</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>org.mule.connectors</groupId>
-			<artifactId>mule-objectstore-connector</artifactId>
-			<version>1.2.2</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>org.mule.connectors</groupId>
-			<artifactId>mule-file-connector</artifactId>
-			<version>1.5.2</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>org.mule.connectors</groupId>
-			<artifactId>mule-email-connector</artifactId>
-			<version>1.7.3</version>
-			<classifier>mule-plugin</classifier>
-		</dependency>
-		<dependency>
-			<groupId>a62f6236-0b02-4e5f-a8eb-dc5e37aedb12</groupId>
-			<artifactId>mule-admin-api</artifactId>
-			<version>1.0.9</version>
-			<classifier>raml</classifier>
-			<type>zip</type>
 		</dependency>
 	</dependencies>
 

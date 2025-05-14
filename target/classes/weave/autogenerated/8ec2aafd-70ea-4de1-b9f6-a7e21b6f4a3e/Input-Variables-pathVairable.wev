@@ -1,4 +1,0 @@
-%dw 2.0
-
-type auto_8ec2aafd_70ea_4de1_b9f6_a7e21b6f4a3e_Input_Variables_pathVairable = String
-
