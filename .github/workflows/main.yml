@@ -86,7 +86,7 @@ name: Test Artifact
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develops ]
 
 jobs:
   test:
