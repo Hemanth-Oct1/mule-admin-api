@@ -5,13 +5,13 @@ on:
     branches: [ develop ]
   pull_request:
     branches: [ develop ]
-    
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -25,12 +25,16 @@ jobs:
         with:
           distribution: "zulu"
           java-version: 8
+
+      - name: Build the Mule application
+        run: mvn clean package -DskipMunitTests --settings .maven/settings.xml
+
       - name: Publish to Exchange
         run: |
-          mvn deploy --settings .maven/settings.xml -DskipMunitTests \
+          mvn deploy -DskipMunitTests --settings .maven/settings.xml \
           -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
           -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}"
-  
+
   deploydev:
     needs: build
     runs-on: ubuntu-latest
@@ -46,6 +50,12 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-maven-
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: 8
 
       - name: List artifacts
         run: ls -al target
