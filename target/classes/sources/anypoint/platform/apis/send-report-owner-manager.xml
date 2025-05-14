@@ -1,0 +1,908 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<flow name="send-report-ownerNameFlow" doc:id="c76abbc8-f9d7-4a6a-acf7-e3fe7858f6a7" >
+		<logger level="INFO" doc:name="Calling Send Report Flow" doc:id="c9e71637-38fd-490e-8a8f-2a1bea947307" message="Calling Send Report Flow"/>
+		<choice doc:name="Choice" doc:id="79f603f0-25c1-4dd7-adb2-0c4cfa3064b1" >
+			<when expression='#[vars.controlPlane == "arm"]'>
+				<flow-ref doc:name="runtime-vcore-report" doc:id="259c25a6-d97d-42f2-b4f9-c0dcfe38f978" name="get:\platform-metrics\runtime-manager\runtime-vcore-allocation:mule-admin-api-config" />
+				<choice doc:name="Choice" doc:id="219fdfdf-7b17-48ec-a965-bf52a1daefd5">
+					<when expression='#[vars."owner-name" != null and vars."managerName" != null]'>
+						<flow-ref doc:name="send-report-owner-and-manager" doc:id="b43435a9-5d94-43b9-a459-ec4d5d1e5221" name="send-report-owner-and-manager" />
+					</when>
+					<otherwise>
+						<flow-ref doc:name="send-report-owner-or-manager" doc:id="09973053-0331-4c92-bca4-91d11f8ae650" name="send-report-owner-or-manager" />
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="api-manager-api-details-report" doc:id="fcf3e15d-6265-4b5b-b33f-70b1cac8be6f" name="get:\platform-metrics\api-manager\api-details:mule-admin-api-config" />
+				<choice doc:name="Choice" doc:id="fba9aa59-f924-49e0-9735-3285c994bc7a">
+					<when expression='#[vars."owner-name" != null and vars."managerName" != null]'>
+						<flow-ref doc:name="send-report-owner-and-manager" doc:id="868190c6-14a7-4887-90ae-17a5ee90a49e" name="send-report-owner-and-manager" />
+					</when>
+					<otherwise>
+						<flow-ref doc:name="send-report-owner-or-manager" doc:id="c2e1ce81-8d68-4831-90e6-5345ef334955" name="send-report-owner-or-manager" />
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="send-report-owner-or-manager" doc:id="578f3d4c-3288-4eeb-9722-fbe7b9614ec4">
+		<choice doc:name="Choice" doc:id="9a082a8d-a02f-4569-bfe3-7ed822a7edd6">
+					<when expression='#[vars."owner-name" != null]'>
+						<ee:transform doc:name="ownerDetails" doc:id="cb1c8a59-86e9-43ca-8fca-271551eb2169">
+					<ee:message />
+					<ee:variables>
+										<ee:set-variable variableName="details"><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case .businessGroups -> $ map ((item, index) -> item  update {
+        case .environments -> $ map ((item1, index) -> item1  update {
+            case .apis -> item1.apis filter ((item2, index) -> item2.ownerName contains vars."owner-name")
+        } )
+    })
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+					</when>
+					<otherwise>
+						<ee:transform doc:name="managerDetails" doc:id="e8c57eeb-a5d1-4668-913d-7478c4387ed1">
+							<ee:message />
+							<ee:variables>
+										<ee:set-variable variableName="details"><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case .businessGroups -> $ map ((item, index) -> item  update {
+        case .environments -> $ map ((item1, index) -> item1  update {
+            case .apis -> item1.apis filter ((item2, index) -> item2.managerName contains vars.managerName)
+        } )
+    })
+}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+					</otherwise>
+				</choice>
+		<choice doc:name="Choice" doc:id="bad7613f-9696-44c0-ba8d-f74adca05a91">
+			<when expression='#[vars.controlPlane == "arm"]'>
+				<ee:transform doc:name="Mapping Required Data" doc:id="3ac57f9a-e598-4d4a-a9fd-1b85f9820c30">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.details.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+	"API Name": api.api_name,
+    "Environment": env.environment,
+    "Squad": api.squad,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Business Group": businessgroup.businessGroup,
+    "Target": api.target,
+    "Runtime Version": api.runtimeVersion,
+    "Size Of Workers": api.sizeOfWorkers,
+    "Number Of Workers": api.numberOfWorkers,
+    "Status": api.status 
+})))
+ ]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+			</when>
+					<otherwise>
+				<ee:transform doc:name="Mapping Required Data" doc:id="de908b86-cec3-45ec-adbf-72a90160b144">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.details.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+	"API Name": api.assetId,
+	"ID": api.id,
+    "Environment": env.environment,
+    "Squad": api.squad,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Business Group": businessgroup.businessGroup,
+    "Asset Version": api.assetVersion,
+    "Status": api.status,
+    "Policies": api.policies.template.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Automated Policies": api.automatedPolicies.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Client Applications Count": api.NumberOfClientApplications,
+    "Client Applications Names": if(api.clientApps == []) "No Client Apps" else (api.clientApps map ((item, index) -> item.clientAppName ) joinBy  ",") 
+})))]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<set-variable value="#[%dw 2.0&#10;output application/csv header=true&#10;---&#10;payload]" doc:name="reports" doc:id="8e492078-47f6-497f-8e29-f46339b0b5e6" variableName="reports" />
+		<logger level="INFO" doc:name="Report Data" doc:id="90074592-6ad1-4f6a-bd03-9bc353b420f8" message="#[vars.reports]" />
+		<choice doc:name="Choice" doc:id="693f2689-6f66-4696-b192-18efb17100d1">
+			<when expression="#[payload != []]">
+				<ee:transform doc:name="Applications, VCores And Squads Summary" doc:id="24912c63-7ada-4f06-bcbd-642ea4aa4772">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+						<ee:set-variable variableName="squadCountSummary" ><![CDATA[%dw 2.0
+output application/csv
+var env = payload.Environment distinctBy ((item) -> item)
+var squads = payload.Squad distinctBy ((item) -> item)
+var squadCounts = env map ((e) -> {
+    Environment: e
+} ++ (squads map ((s) -> {
+    (s): sizeOf(payload filter ((p) -> p.Environment == e and p.Squad == s))
+}) reduce ((acc, item) -> acc ++ item)))
+---
+squadCounts]]></ee:set-variable>
+						<ee:set-variable variableName="applicationCountSummary" ><![CDATA[%dw 2.0
+output application/csv
+var env = payload.Environment distinctBy ((item, index) -> item )
+var appCount = env map ((item, index) -> {(item): sizeOf(payload filter ((item1, index) -> item1.Environment contains item) )}) reduce ((item, accumulator) -> accumulator ++ item )
+var squad = payload.Squad distinctBy ((item, index) -> item )
+var test = env map ((item, index) -> (item): payload filter ((item1, index) -> item1.Environment contains item) map ((item1, index) -> item1.Squad )) reduce ((item, accumulator) -> accumulator ++ item)
+var squadCount = test mapObject ((value, key, index) -> (key): squad map ((item, index) -> {(item): sizeOf(value filter ((item1, index) -> item1 contains item) )} ) reduce ((item, accumulator) -> accumulator ++ item))
+var squadResponse = test mapObject ((value, key, index) -> (key): squad map ((item, index) -> {(item ++ "(" ++ key ++ ")"): sizeOf(value filter ((item1, index) -> item1 contains item) )} ) reduce ((item, accumulator) -> accumulator ++ item))
+---
+squadResponse pluck ((value, key, index) -> 
+{
+    Environment: key,
+    "Total Number Of Applications": sum(valuesOf(value))
+})]]></ee:set-variable>
+						<ee:set-variable variableName="vcoresSummary" ><![CDATA[%dw 2.0
+output application/csv
+var totalVcores = sum(payload map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0 ))
+var prdVcores = sum((payload filter ((item, index) -> lower(item.Environment) contains "p")) map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0 ))
+---
+{
+    "Total VCores": totalVcores,
+    "Production VCores": prdVcores,
+    "Non Production Vcores": totalVcores - prdVcores
+}]]></ee:set-variable>
+						<ee:set-variable variableName="envVcoresSummary" ><![CDATA[%dw 2.0
+output application/csv
+var envs = payload.Environment distinctBy ((item, index) -> item)
+---
+envs map ((item, index) -> payload filter ((item1, index) -> item1.Environment contains item)) map ((item2, index) -> {(item2.Environment distinctBy ((item, index) -> item) joinBy  ""): sum(item2 map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0))}) reduce ((item, acc) -> acc ++ item )]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+				<logger level="INFO" doc:name="Applications Count" doc:id="cece5bd5-718e-4dcb-8de2-eccc9f61060f" message="#[vars.'applicationCountSummary']" />
+				<logger level="INFO" doc:name="Squads Count" doc:id="72eacd47-6c7d-4c16-9a29-637d29102cde" message="#[vars.'squadCountSummary']" />
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;vars.reports]' doc:name="rawFeed" doc:id="7fad64b8-049b-479a-aa2b-dbfd1675622b" variableName="rawFeed" />
+				<logger level="INFO" doc:name="Raw Feed Data" doc:id="216ba7e1-f68d-4c1e-be01-daa31739290f" message="#[vars.rawFeed]" />
+				<ee:transform doc:name="Converting CSV to JSON" doc:id="6f46998d-ecb4-4604-a648-7fb0949d0d46">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.reports]]></ee:set-payload>
+					</ee:message>
+			<ee:variables>
+			</ee:variables>
+				</ee:transform>
+				<choice doc:name="Choice" doc:id="d8a54416-1b99-4804-8a98-c7d308df3a1f">
+			<when expression='#[vars.controlPlane == "arm"]'>
+						<ee:transform doc:name="HTML Code, excelSheet" doc:id="edc9a32e-e6ae-4ab3-9eca-7cec026d1050">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var vcores = flatten(vars.'vcoresSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var envVcores = flatten(vars.envVcoresSummary map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var squadKeys = flatten(vars.'squadCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var dataKeys = flatten(payload map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+---
+"<!DOCTYPE html> <html> <head> <title>Runtime Manager Report</title> <style> table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; text-align: center; } th { background-color: #f2f2f2; } </style> </head> <body> <h1>Runtime Manager Details</h1> <h2>Total VCores Allocated</h2> <table> <thead> <tr>" ++ ((vcores map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.vcoresSummary map (row) -> 
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>VCores Per Environment</h2> <table> <thead> <tr> " ++ ((envVcores map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'envVcoresSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Squad Count Summary</h2> <table> <thead> <tr> " ++ ((squadKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'squadCountSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Report</h2> <table> <thead> <tr>" ++ ((dataKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((payload map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> </body> </html>"]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="excelSheet"><![CDATA[%dw 2.0
+output application/json
+---
+"RuntimeManagerDetails.xlsx"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+						<ee:transform doc:name="excelReport" doc:id="bc704678-56f3-49a7-b031-ce5d627abca6">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.reports,
+	TotalVCores : vars.vcoresSummary,
+	VCoresPerEnvironment : vars.envVcoresSummary,
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="HTML Code, excelSheet" doc:id="348a13e7-4d20-479a-bc9a-6eb5de62209e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var appsKey = flatten(vars.'applicationCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var squadKeys = flatten(vars.'squadCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var dataKeys = flatten(payload map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+---
+"<!DOCTYPE html> <html> <head> <title>API Manager Report</title> <style> table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; text-align: center; } th { background-color: #f2f2f2; } </style> </head> <body> <h1>API Manager Details</h1> <h2>Application Count Summary</h2> <table> <thead> <tr>" ++ ((appsKey map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.applicationCountSummary map (row) -> 
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String  ++ "</tbody> </table> <h2>Squad Count Summary</h2> <table> <thead> <tr> " ++ ((squadKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'squadCountSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Report</h2> <table> <thead> <tr>" ++ ((dataKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((payload map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> </body> </html>"]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="excelSheet"><![CDATA[%dw 2.0
+output application/json
+---
+"APIManagerDetails.xlsx"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+						<ee:transform doc:name="excelReport" doc:id="154e7fdd-5e90-42af-9c80-3ccf668e4f84">
+					<ee:message />
+					<ee:variables>
+						<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.reports,
+	ApplicationCount : vars.'applicationCountSummary',
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</otherwise>
+		</choice>
+				<ee:transform doc:name="htmlReport" doc:id="5c4bad01-38f0-4151-91ab-10bc44824425">
+					<ee:message>
+					</ee:message>
+			<ee:variables>
+						<ee:set-variable variableName="htmlReport" ><![CDATA[%dw 2.0
+output text 
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+				</ee:transform>
+				<ee:transform doc:name="email" doc:id="4a47da41-e8da-4661-b796-081d007d1b56">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+						<ee:set-variable variableName="email" ><![CDATA[%dw 2.0
+output application/json
+var ownerName = vars."owner-name"
+var managerName = vars.managerName
+var owner = p('mule.owner')
+var manager = p('mule.manager')
+var defaultEmail = p('mule.default')
+var ownerEmails = owner splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+var managerEmails = manager splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+var ownerEmail = flatten(ownerEmails filter ((item, index) -> ownerName contains item[0]))[1] default defaultEmail
+var managerEmail = flatten(managerEmails filter ((item, index) -> managerName contains item[0]))[1] default defaultEmail
+---
+if(managerName != null ) managerEmail else ownerEmail]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+				<logger level="INFO" doc:name="Email" doc:id="70893ec3-966d-42c1-ad31-527fde31a255" message="#[vars.email]" />
+				<email:send doc:name="Send" doc:id="69a3b012-57c4-42f6-9784-a1ae9fc7a85a" config-ref="Email_SMTP" subject='#[vars.controlPlane ++ " Report sent to "++ if(vars."owner-name" != null) vars."owner-name" else vars.managerName]'>
+			<email:to-addresses>
+				<email:to-address value="#[vars.email]" />
+			</email:to-addresses>
+			<email:body contentType="text/html">
+				<email:content><![CDATA[#[vars.htmlReport]]]></email:content>
+			</email:body>
+			<email:attachments><![CDATA[#[{
+(vars.excelSheet) : vars.excelReport,
+"rawFeed.json": vars.rawFeed
+}]]]></email:attachments>
+		</email:send>
+				<ee:transform doc:name="Final Transformation" doc:id="b6300eaf-8184-404c-8f7e-9347adde6e5d">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"Mail Sent Successfully to " ++ vars.email]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<logger level="INFO" doc:name="Response" doc:id="0cf3c03e-e38e-484e-9c27-bd882c7eae61" message='#[payload]' />
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Final Transformation" doc:id="ca3e9d87-a05e-454d-9b70-cd09860df434" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var name = if(vars.'owner-name' != null) vars.'owner-name' else vars.managerName
+---
+name ++ " doesn't contain any records in " ++ vars.controlPlane]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="64eb0da6-cba4-4dde-a2ba-ba84756d3afb" message="#[payload]"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="send-report-owner-and-manager" doc:id="1befd392-92b4-4987-b8d5-1061352fb4e4" >
+		<ee:transform doc:name="owner and manager details" doc:id="a52f4b3e-78ad-4f6c-b4d8-d67c77854afb">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="ownerDetails"><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case .businessGroups -> $ map ((item, index) -> item  update {
+        case .environments -> $ map ((item1, index) -> item1  update {
+            case .apis -> item1.apis filter ((item2, index) -> item2.ownerName contains vars."owner-name")
+        } )
+    })
+}]]></ee:set-variable>
+								<ee:set-variable variableName="managerDetails"><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case .businessGroups -> $ map ((item, index) -> item  update {
+        case .environments -> $ map ((item1, index) -> item1  update {
+            case .apis -> item1.apis filter ((item2, index) -> item2.managerName contains vars.managerName)
+        } )
+    })
+}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+		<choice doc:name="Choice" doc:id="553bb687-afef-4418-be16-d21e746d3763" >
+			<when expression='#[vars.controlPlane == "arm"]'>
+				<ee:transform doc:name="ownerDetails, managerDetails" doc:id="9a5a59ea-05c4-4f9d-9935-9d22657b0ab6">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="ownerDetails"><![CDATA[%dw 2.0
+output application/csv header=true
+---
+vars.ownerDetails.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+    "Business Group": businessgroup.businessGroup,
+    "Environment": env.environment,
+    "API Name": api.api_name,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Target": api.target,
+    "Runtime Version": api.runtimeVersion,
+    "Size Of Workers": api.sizeOfWorkers,
+    "Number Of Workers": api.numberOfWorkers,
+    "Status": api.status,
+    "Squad": api.squad
+     
+})))
+ ]]></ee:set-variable>
+								<ee:set-variable variableName="managerDetails"><![CDATA[%dw 2.0
+output application/csv header=true
+---
+vars.managerDetails.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+    "Business Group": businessgroup.businessGroup,
+    "Environment": env.environment,
+    "API Name": api.api_name,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Target": api.target,
+    "Runtime Version": api.runtimeVersion,
+    "Size Of Workers": api.sizeOfWorkers,
+    "Number Of Workers": api.numberOfWorkers,
+    "Status": api.status,
+    "Squad": api.squad
+    
+})))]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="ownerDetails, managerDetails" doc:id="920861dc-d926-4ec9-8c92-339afa57dbe3" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="ownerDetails" ><![CDATA[%dw 2.0
+output application/csv header=true
+---
+vars.ownerDetails.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+    "Business Group": businessgroup.businessGroup,
+    "Environment": env.environment,
+    "Squad": api.squad,
+    "ID": api.id,
+    "API Name": api.assetId,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Asset Version": api.assetVersion,
+    "Status": api.status,
+    "Policies": api.policies.template.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Automated Policies": api.automatedPolicies.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Client Applications Count": api.NumberOfClientApplications,
+    "Client Applications Names": if(api.clientApps == []) "No Client Apps" else (api.clientApps map ((item, index) -> item.clientAppName ) joinBy  ",") 
+})))]]></ee:set-variable>
+						<ee:set-variable variableName="managerDetails" ><![CDATA[%dw 2.0
+output application/csv header=true
+---
+vars.managerDetails.businessGroups flatMap ((businessgroup) ->
+businessgroup.environments flatMap ((env) ->
+env.apis map ((api) ->
+{
+    "Business Group": businessgroup.businessGroup,
+    "Environment": env.environment,
+    "Squad": api.squad,
+    "ID": api.id,
+    "API Name": api.assetId,
+    "Owner Name": api.ownerName,
+    "Manager Name": api.managerName,
+    "Asset Version": api.assetVersion,
+    "Status": api.status,
+    "Policies": api.policies.template.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Automated Policies": api.automatedPolicies.assetId reduce ((item, accumulator) -> item ++ "," ++ accumulator ) default "No policy",
+    "Client Applications Count": api.NumberOfClientApplications,
+    "Client Applications Names": if(api.clientApps == []) "No Client Apps" else (api.clientApps map ((item, index) -> item.clientAppName ) joinBy  ",") 
+})))]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="ownerDetailsjson, managerDetailsjson" doc:id="e8da777e-deb1-4da6-be17-60fa2fa7be85" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="managerDetailsjson" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.managerDetails]]></ee:set-variable>
+				<ee:set-variable variableName="ownerDetailsjson" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.ownerDetails]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="1ae73841-cf7c-4dc3-b3fc-be39a6e736db" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+[(vars.ownerDetailsjson map ((item, index) -> item ++ {"category": "owner"})), (vars.managerDetailsjson map ((item, index) -> item ++ {"category": "manager"}))]]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="f43294ac-8cdb-4856-98dd-20cbce0991b1" collection="#[payload]">
+			<choice doc:name="Choice" doc:id="7e488cd2-2898-4c82-8447-876ad9343f1d">
+			<when expression="#[payload != []]">
+					<ee:transform doc:name="jsonData" doc:id="834aa74d-2960-4e16-9a1b-0a342ecca6ec">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+							<ee:set-variable variableName="jsonData" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+					<logger level="INFO" doc:name="Details" doc:id="81a2e047-3a00-4fb4-a718-c226e41b4114" message="#[vars.jsonData]" />
+					<ee:transform doc:name="Applications, VCores And Squads Summary" doc:id="0af21f6e-e626-4d36-87a9-61a0bff773bb">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+							<ee:set-variable variableName="squadCountSummary" ><![CDATA[%dw 2.0
+output application/csv
+var env = payload.Environment distinctBy ((item) -> item)
+var squads = payload.Squad distinctBy ((item) -> item)
+var squadCounts = env map ((e) -> {
+    Environment: e
+} ++ (squads map ((s) -> {
+    (s): sizeOf(payload filter ((p) -> p.Environment == e and p.Squad == s))
+}) reduce ((acc, item) -> acc ++ item)))
+---
+squadCounts]]></ee:set-variable>
+							<ee:set-variable variableName="applicationCountSummary" ><![CDATA[%dw 2.0
+output application/csv
+var env = payload.Environment distinctBy ((item, index) -> item )
+var appCount = env map ((item, index) -> {(item): sizeOf(payload filter ((item1, index) -> item1.Environment contains item) )}) reduce ((item, accumulator) -> accumulator ++ item )
+var squad = payload.Squad distinctBy ((item, index) -> item )
+var test = env map ((item, index) -> (item): payload filter ((item1, index) -> item1.Environment contains item) map ((item1, index) -> item1.Squad )) reduce ((item, accumulator) -> accumulator ++ item)
+var squadCount = test mapObject ((value, key, index) -> (key): squad map ((item, index) -> {(item): sizeOf(value filter ((item1, index) -> item1 contains item) )} ) reduce ((item, accumulator) -> accumulator ++ item))
+var squadResponse = test mapObject ((value, key, index) -> (key): squad map ((item, index) -> {(item ++ "(" ++ key ++ ")"): sizeOf(value filter ((item1, index) -> item1 contains item) )} ) reduce ((item, accumulator) -> accumulator ++ item))
+---
+squadResponse pluck ((value, key, index) -> 
+{
+    Environment: key,
+    "Total Number Of Applications": sum(valuesOf(value))
+})]]></ee:set-variable>
+							<ee:set-variable variableName="vcoresSummary" ><![CDATA[%dw 2.0
+output application/csv
+var totalVcores = sum(vars.jsonData map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0 ))
+var prdVcores = sum((vars.jsonData filter ((item, index) -> lower(item.Environment) contains "p")) map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0 ))
+---
+{
+    "Total VCores": totalVcores,
+    "Production VCores": prdVcores,
+    "Non Production VCores": totalVcores - prdVcores
+}]]></ee:set-variable>
+							<ee:set-variable variableName="envVcoresSummary" ><![CDATA[%dw 2.0
+output application/csv
+var envs = payload.Environment distinctBy ((item, index) -> item)
+---
+envs map ((item, index) -> payload filter ((item1, index) -> item1.Environment contains item)) map ((item2, index) -> {(item2.Environment distinctBy ((item, index) -> item) joinBy  ""): sum(item2 map ((item, index) -> if(item.Status == "STARTED") ((item."Size Of Workers") * (item."Number Of Workers")) else 0))}) reduce ((item, acc) -> acc ++ item )]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+				<choice doc:name="Choice" doc:id="0a7c80d4-a330-4359-afa3-cb43c8cdd91a">
+			<when expression='#[vars.controlPlane == "arm"]'>
+							<ee:transform doc:name="HTML Code" doc:id="0cec736a-7a66-4c1c-9c48-bee5fb4cb912">
+							<ee:message>
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var vcores = flatten(vars.'vcoresSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var envVcores = flatten(vars.envVcoresSummary map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var squadKeys = flatten(vars.'squadCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var dataKeys = flatten(payload map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+---
+"<!DOCTYPE html> <html> <head> <title>Runtime Manager Report</title> <style> table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; text-align: center; } th { background-color: #f2f2f2; } </style> </head> <body> <h1>Runtime Manager Details</h1> <h2>Total VCores Allocated</h2> <table> <thead> <tr>" ++ ((vcores map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.vcoresSummary map (row) -> 
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>VCores Per Environment</h2> <table> <thead> <tr> " ++ ((envVcores map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'envVcoresSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Squad Count Summary</h2> <table> <thead> <tr> " ++ ((squadKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'squadCountSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Report</h2> <table> <thead> <tr>" ++ ((dataKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((payload map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> </body> </html>"]]></ee:set-payload>
+							</ee:message>
+							<ee:variables>
+									<ee:set-variable variableName="excelSheet" ><![CDATA[%dw 2.0
+output application/json
+---
+"RuntimeManagerDetails.xlsx"]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="HTML Code" doc:id="0b297466-6ee0-4f89-a5a4-e04887e45966">
+			<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var appsKey = flatten(vars.'applicationCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var squadKeys = flatten(vars.'squadCountSummary' map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+var dataKeys = flatten(payload map ((item, index) -> keysOf(item)) distinctBy ((item, index) -> item))
+---
+"<!DOCTYPE html> <html> <head> <title>API Manager Report</title> <style> table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #ddd; padding: 8px; text-align: center; } th { background-color: #f2f2f2; } </style> </head> <body> <h1>API Manager Details</h1> <h2>Application Count Summary</h2> <table> <thead> <tr>" ++ ((appsKey map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.applicationCountSummary map (row) -> 
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String  ++ "</tbody> </table> <h2>Squad Count Summary</h2> <table> <thead> <tr> " ++ ((squadKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((vars.'squadCountSummary' map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> <h2>Report</h2> <table> <thead> <tr>" ++ ((dataKeys map (key) -> "<th>" ++ key ++ "</th>") joinBy "" ) ++ "</tr> </thead> <tbody>" ++ ((payload map (row) ->
+  "<tr>" ++ ((valuesOf(row) map (value) -> "<td>" ++ value ++ "</td>") joinBy "") ++ "</tr>"
+) joinBy "") as String ++ "</tbody> </table> </body> </html>"]]></ee:set-payload>
+								</ee:message>
+			<ee:variables>
+									<ee:set-variable variableName="excelSheet" ><![CDATA[%dw 2.0
+output application/json
+---
+"APIManagerDetails.xlsx"]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			</otherwise>
+		</choice>
+				<ee:transform doc:name="htmlReport" doc:id="2f6c1894-0e8a-41a6-98fb-a13da5be2496">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+							<ee:set-variable variableName="htmlReport" ><![CDATA[%dw 2.0
+output text
+---
+payload]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+				<choice doc:name="Choice" doc:id="2362185f-c833-449e-8048-ee151958658b">
+						<when expression='#[(vars.jsonData.category distinctBy ((item, index) -&gt; item) joinBy "") == "owner"]'>
+							<choice doc:name="Choice" doc:id="c8f9ebfa-2192-4619-95d8-2fdbb9f7543b">
+								<when expression='#[vars.controlPlane == "arm"]'>
+									<ee:transform doc:name="excelReport" doc:id="b26bd1a5-6045-4015-b1c6-e7e380db6844">
+								<ee:message />
+								<ee:variables>
+									<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.ownerDetails,
+	TotalVCores : vars.vcoresSummary,
+	VCoresPerEnvironment : vars.envVcoresSummary,
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+								</when>
+								<otherwise >
+									<ee:transform doc:name="excelReport" doc:id="d3390fb8-71b7-4241-86cc-856284b6fc57">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+							<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.ownerDetails,
+	ApplicationCount : vars.'applicationCountSummary',
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+								</otherwise>
+							</choice>
+							<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;vars.ownerDetails]' doc:name="rawFeed" doc:id="3dbf92c6-9b9e-43ca-9b1c-7ae15863da17" variableName="rawFeed" />
+							<ee:transform doc:name="email" doc:id="b3a47971-6527-420b-8384-a697c1114be5">
+							<ee:message>
+							</ee:message>
+							<ee:variables>
+							<ee:set-variable variableName="email"><![CDATA[%dw 2.0
+output application/json
+var ownerName = vars."owner-name"
+var owner = p('mule.owner')
+var defaultEmail = p('mule.default')
+var ownerEmails = owner splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+var ownerEmail = flatten(ownerEmails filter ((item, index) -> ownerName contains item[0]))[1] default defaultEmail as String
+---
+ownerEmail]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						</when>
+						<otherwise >
+							<choice doc:name="Choice1" doc:id="badcecf7-c98b-4d20-be1e-1d61ebd8054c">
+						<when expression='#[vars.controlPlane == "arm"]'>
+							<ee:transform doc:name="excelReport" doc:id="6d76849b-58b2-4556-a106-8aeed59d6f33">
+								<ee:message />
+								<ee:variables>
+									<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.managerDetails,
+	TotalVCores : vars.vcoresSummary,
+	VCoresPerEnvironment : vars.envVcoresSummary,
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+						</when>
+						<otherwise>
+									<ee:transform doc:name="excelReport" doc:id="3b325064-2493-4852-996a-aff2754c6008">
+								<ee:message>
+								</ee:message>
+								<ee:variables>
+									<ee:set-variable variableName="excelReport"><![CDATA[%dw 2.0
+output application/xlsx header=true
+---
+{
+	Report: vars.managerDetails,
+	ApplicationCount : vars.'applicationCountSummary',
+	SquadCount : vars.'squadCountSummary' 
+}]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+						</otherwise>
+					</choice>
+							<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;vars.managerDetails]' doc:name="rawFeed" doc:id="360cf7bb-7ddb-4f35-8fad-5ceae62b67e9" variableName="rawFeed" />
+							<ee:transform doc:name="email" doc:id="6dbd07ee-f680-43b5-9895-c6547d30596f" >
+								<ee:message >
+								</ee:message>
+								<ee:variables >
+									<ee:set-variable variableName="email" ><![CDATA[%dw 2.0
+output application/json
+var managerName = vars.managerName
+var manager = p('mule.manager')
+var defaultEmail = p('mule.default')
+var managerEmails = manager splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+var managerEmail = flatten(managerEmails filter ((item, index) -> managerName contains item[0]))[1] default defaultEmail as String
+---
+managerEmail]]></ee:set-variable>
+								</ee:variables>
+							</ee:transform>
+						</otherwise>
+					</choice>
+					<logger level="INFO" doc:name="Email" doc:id="48765fff-c1cb-4c93-90f3-842d3cf4b1fc" message="#[vars.email]" />
+					<email:send doc:name="Send" doc:id="c346e2f6-9703-4c11-8e75-087863e5b41b" config-ref="Email_SMTP" subject='#[vars.controlPlane ++ " Report sent to " ++ if(vars.jsonData[0].category == "owner") vars."owner-name" else vars.managerName]'>
+									<email:to-addresses>
+										<email:to-address value="#[vars.email]" />
+									</email:to-addresses>
+									<email:body contentType="text/html">
+										<email:content><![CDATA[#[vars."htmlReport"]]]></email:content>
+									</email:body>
+									<email:attachments><![CDATA[#[{
+(vars.excelSheet) : vars.excelReport,
+"rawFeed.json": vars.rawFeed
+}]]]></email:attachments>
+								</email:send>
+					<ee:transform doc:name="response" doc:id="b0057daa-b0a3-4448-9881-b94af3ce1818">
+			<ee:message>
+			</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="response" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.response + ("Mail Sent Successfully to " ++ vars.email)]]></ee:set-variable>
+						</ee:variables>
+		</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="response" doc:id="3c277066-d4b5-449c-bd61-c21e5396f1bc">
+					<ee:message>
+					</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="response" ><![CDATA[%dw 2.0
+output application/json
+var name = if(vars."ownerDetailsjson" == [] and vars.managerDetailsjson != []) vars.'owner-name' else if(vars."ownerDetailsjson" != [] and vars.managerDetailsjson == []) vars.managerName else (vars.'owner-name' ++ ", " ++ vars.managerName)
+---
+vars.response + (name ++ " doesn't contain any records in " ++ vars.controlPlane)]]></ee:set-variable>
+						</ee:variables>
+				</ee:transform>
+					<logger level="INFO" doc:name="Logger" doc:id="72ec6a3e-be1e-407a-8485-4a2e0199f04f" message="#[vars.response]"/>
+			</otherwise>
+		</choice>
+		</foreach>
+		<ee:transform doc:name="Final Transformation" doc:id="ffb10b05-7759-4da9-895c-27ce431caae0" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.response distinctBy ((item, index) -> item)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="2fbbd96d-c1c8-4569-a039-5d4e91ef0c42" message='#["Mail Sent Successfully"]' />
+	</flow>
+	<flow name="scheduler-to-send-all-owners-and-managers" doc:id="7dbb401f-b6e4-4c22-8c89-6e9fa7b968de" initialState="stopped">
+		<!-- [STUDIO:"Scheduler"]<scheduler doc:name="Scheduler" doc:id="8e698242-d205-400c-8a22-0c54a0f1ef8a" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="1" timeUnit="DAYS"/>
+			</scheduling-strategy>
+		</scheduler> [STUDIO] -->
+		<logger level="INFO" doc:name="Scheduler Started" doc:id="c774ad75-027d-4943-968b-7b3e514fa432" message="Scheduler Started"/>
+		<ee:transform doc:name="controlPlanes" doc:id="02533de9-9a19-480b-81f8-fa445ba5c72f">
+			<ee:message>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="controlPlanes" ><![CDATA[%dw 2.0
+output application/json
+---
+["arm", "APIManager"]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="5aae002a-9674-4e13-9b1a-0c3827bf1bc2" collection="#[vars.controlPlanes]">
+			<set-variable value="#[payload]" doc:name="controlPlane" doc:id="e91cabba-1ed1-48ce-97e5-095974edd531" variableName="controlPlane" />
+			<choice doc:name="Choice" doc:id="8e4748ca-ec01-4de5-8dca-c4f89b1a3291">
+				<when expression='#[vars.controlPlane == "arm"]'>
+					<flow-ref doc:name="runtime-vcore-report" doc:id="34d81522-c7f3-457b-8e88-7b91918ad1e4" name="get:\platform-metrics\runtime-manager\runtime-vcore-allocation:mule-admin-api-config" target="runtime" />
+				</when>
+				<otherwise>
+					<flow-ref doc:name="api-manager-api-details-report" doc:id="41eeaabe-6ad6-4a24-9616-9207c3ace1e4" name="get:\platform-metrics\api-manager\api-details:mule-admin-api-config" target="apimanager" />
+				</otherwise>
+			</choice>
+			<scatter-gather doc:name="Scatter-Gather" doc:id="9cf90348-bf12-44f1-a1c5-a1e2bed79dcc" maxConcurrency="1">
+				<route>
+					<ee:transform doc:name="ownerNames" doc:id="c21aa8c9-1307-40cf-acf1-28f7bf4cb310">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="ownerNames"><![CDATA[%dw 2.0
+output application/json
+var ownerName = vars."owner-name"
+var owner = p('mule.owner')
+var defaultEmail = p('mule.default')
+var ownerNames = owner splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+---
+ownerNames map ((item, index) -> item[0] )]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+					<parallel-foreach doc:name="Parallel For Each" doc:id="c799aa29-b356-43c3-8a49-b3c1cc1c2e13" collection="#[vars.ownerNames]">
+						<choice doc:name="Choice" doc:id="df7f3a1d-4475-4257-b12d-2d65c33bd5a3">
+							<when expression='#[vars.controlPlane == "arm"]'>
+								<ee:transform doc:name="Transform Message" doc:id="0879c974-4a1a-4224-859a-0a4a90ecafe6">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.runtime]]></ee:set-payload>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="owner-name"><![CDATA[%dw 2.0
+output application/json
+---
+payload as String]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+							</when>
+							<otherwise>
+								<ee:transform doc:name="Transform Message" doc:id="ad944337-ec8d-4873-97c2-b3a9c19eae79">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.apimanager]]></ee:set-payload>
+									</ee:message>
+									<ee:variables>
+										<ee:set-variable variableName="owner-name"><![CDATA[%dw 2.0
+output application/json
+---
+payload as String]]></ee:set-variable>
+									</ee:variables>
+								</ee:transform>
+							</otherwise>
+						</choice>
+						<flow-ref doc:name="send-report-owner-or-manager" doc:id="eaced44b-37da-4eb7-8683-849573d13c7e" name="send-report-owner-or-manager" />
+					</parallel-foreach>
+				</route>
+				<route>
+					<ee:transform doc:name="managerNames" doc:id="50b0cabb-c61b-4373-9e69-63eeb2f19b66">
+						<ee:message>
+						</ee:message>
+						<ee:variables>
+							<ee:set-variable variableName="managerNames"><![CDATA[%dw 2.0
+output application/json
+var manager = p('mule.manager')
+var defaultEmail = Mule::p('mule.default')
+var managerNames = manager splitBy "'" filter ((item) -> sizeOf(item) >= 5) map ((item, index) -> item splitBy "," )
+---
+managerNames map ((item, index) -> item[0] )]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<parallel-foreach doc:name="Parallel For Each" doc:id="4148872f-8760-4f28-ac7c-6388acefd725" collection="#[vars.managerNames]">
+						<choice doc:name="Choice" doc:id="af46932f-45d1-4b4e-9fe9-c8b051c3eb2e">
+							<when expression='#[vars.controlPlane == "arm"]'>
+								<ee:transform doc:name="Transform Message" doc:id="490f9456-09b7-4479-af5f-4c44fefd1571">
+									<ee:message>
+										<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.runtime]]></ee:set-payload>
+									</ee:message>
+									<ee:variables>
+										<ee:set-variable variableName="managerName"><![CDATA[%dw 2.0
+output application/json
+---
+payload as String]]></ee:set-variable>
+									</ee:variables>
+								</ee:transform>
+							</when>
+							<otherwise>
+								<ee:transform doc:name="Transform Message" doc:id="0d054fa1-6de5-4ada-89c8-299e9acab350">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.apimanager]]></ee:set-payload>
+							</ee:message>
+							<ee:variables>
+								<ee:set-variable variableName="managerName"><![CDATA[%dw 2.0
+output application/json
+---
+payload as String]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+							</otherwise>
+						</choice>
+						<flow-ref doc:name="send-report-owner-or-manager" doc:id="5abdf28b-d73b-4a9a-9ca8-28e730d74d18" name="send-report-owner-or-manager" />
+					</parallel-foreach>
+				</route>
+			</scatter-gather>
+		</parallel-foreach>
+	</flow>
+</mule>

@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="update-all-connectors-in-all-applications-flow" doc:id="98fc8eec-b0f3-4df7-a8fc-1521202e3f82" >
+		<file:list doc:name="List" doc:id="92288cc1-b27c-4459-aa2a-2664759c6b2c" directoryPath="${secure::file.path}" />
+		<ee:transform doc:name="Stores fileNames" doc:id="dc897bda-4d85-4e5f-b1ab-448cd4eb0a43" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.attributes.fileName]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="readData" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="be14a216-a127-497c-9205-467dd2f2c035" collection="#[payload]" >
+			<flow-ref doc:name="connector-versionsFlow" doc:id="5c00f09f-a5c5-407a-9578-068824bb449c" name="connector-versionsFlow"/>
+			<ee:transform doc:name="pomUpdate, connector-latest-version" doc:id="bd3a268d-9845-493f-822a-1a7978fd3c1e" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.readData]]></ee:set-variable>
+					<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+vars."connector-latest-version" + vars."latest-version"
+]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<foreach doc:name="For Each" doc:id="7c7e271b-3ef5-481d-b241-33adb958e2a5" collection='#[vars."connector-name"]' >
+				<set-variable value="#[payload]" doc:name="connectorName" doc:id="c565872d-203e-41a3-b490-34dbd9e11015" variableName="connectorName" />
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;var version = vars."latest-version"&#10;var id = payload&#10;---&#10;if ((version filter $.connectorName == id)[0].latestVersionInExchange != "Unsupported")&#10;    (version filter $.connectorName == id)[0].latestVersionInExchange&#10;else &#10;    (version filter $.connectorName == id)[0].currentVersionInApi]' doc:name="latestVersion" doc:id="8f372fd1-957d-4316-bab9-7f5714aa4c3b" variableName="latestVersion" />
+				<ee:transform doc:name="pomUpdate" doc:id="ca66b807-b8f5-4336-b6d4-8cf20d528da9" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.pomUpdate]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<ee:transform doc:name="pomUpdate" doc:id="be27c903-160e-4a90-8f6c-ce01daf9c324" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/xml
+var targetArtifactId = vars.connectorName
+var version = vars.latestVersion
+---
+vars.pomUpdate update {
+    case .project.dependencies -> $
+        mapObject ((value, key) -> 
+            if (value.artifactId == targetArtifactId) 
+                (key): value update {
+                case .version -> version
+                }
+            else 
+                (key): value
+        )
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</foreach>
+			<ee:transform doc:name="Transform Message" doc:id="3b5d16a1-e9e6-4374-bdee-b830b32226fe" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.pomUpdate]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<file:write doc:name="Rewrite the pom file with latest version" doc:id="002c3238-6a77-46a0-b16c-9d0642a3f52b" path="#[vars.path]" />
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="63594890-f839-4a47-95e7-0b9355ed4d7a" message='#["Connector versions updated successfully"]' />
+		<ee:transform doc:name="Final Transformation" doc:id="865f1f76-98aa-42b2-8697-f37955ce2014" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Connector versions are successfully updated in all projects"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="update-all-connectors-in-a-project-flow" doc:id="7c727a49-2901-4e43-9d63-87fbd3b5f48e" >
+		<file:list doc:name="List" doc:id="92624ce6-e35d-451c-bb51-1921fd7e256f" directoryPath="${secure::file.path}" />
+		<ee:transform doc:name="Stores fileNames" doc:id="ac7ea76e-5726-41e1-a2a8-2d300970b17e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var projectname = vars.appName
+---
+payload.attributes.fileName filter (item) -> item == projectname]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="readData" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="294e0611-cc66-4b1e-af5a-b89cd97f3a65" collection="#[payload]" >
+			<flow-ref doc:name="connector-versionsFlow" doc:id="6d746867-7311-4836-93ed-6271a48a1930" name="connector-versionsFlow" />
+			<ee:transform doc:name="pomUpdate, connector-latest-version" doc:id="98c34c56-76b9-4411-96b1-e6ffe1d4fe06" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+vars."connector-latest-version" + vars."latest-version"
+]]></ee:set-variable>
+					<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.readData]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<foreach doc:name="For Each" doc:id="e352ab5c-7508-49c6-936d-a487322f48df" collection='#[vars."connector-name"]' >
+				<set-variable value="#[payload]" doc:name="connectorName" doc:id="9b4a2bd6-dc33-48be-8a30-865a068d2bf0" variableName="connectorName" />
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;var version = vars."latest-version"&#10;var id = payload&#10;---&#10;if ((version filter $.connectorName == id)[0].latestVersionInExchange != "Unsupported")&#10;    (version filter $.connectorName == id)[0].latestVersionInExchange&#10;else &#10;    (version filter $.connectorName == id)[0].currentVersionInApi]' doc:name="latestVersion" doc:id="9290c171-fe59-4d82-a6df-cbab8d56d418" variableName="latestVersion" />
+				<ee:transform doc:name="pomUpdate" doc:id="b4651871-ca8a-4179-bf9b-f16097fab2fb" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.pomUpdate]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<ee:transform doc:name="pomUpdate" doc:id="23f0cca1-ad8e-4f44-b935-0d9f94e152ae" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="pomUpdate" ><![CDATA[%dw 2.0
+output application/xml
+var targetArtifactId = vars.connectorName
+var version = vars.latestVersion
+---
+vars.pomUpdate update {
+    case .project.dependencies -> $
+        mapObject ((value, key) -> 
+            if (value.artifactId == targetArtifactId) 
+                (key): value update {
+                case .version -> version
+                }
+            else 
+                (key): value
+        )
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</foreach>
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="3ac597a0-02e0-4974-81b3-7e76c5884c8d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.pomUpdate]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<file:write doc:name="Rewrite the pom file with latest version" doc:id="1d6c74f2-1e23-4644-b99e-2876e516f32a" path="#[vars.path]" />
+		<logger level="INFO" doc:name="Logger" doc:id="05e36866-0567-44db-ada6-7fa5906024db" message='#["Connector versions updated successfully"]' />
+		<ee:transform doc:name="Final Transformation" doc:id="9091b365-4b9e-4955-bb44-6c93ec33e8b3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Connector versions updated successfully"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="get-all-application-details-flow" doc:id="276a0d23-81c0-4781-a6f1-e098aa5eaacb" >
+		<file:list doc:name="List" doc:id="2209adb3-9938-45a8-a6cc-7c4d5355265b" directoryPath="${secure::file.path}" />
+		<ee:transform doc:name="Stores fileNames" doc:id="ae6ef67d-8817-45b3-bf07-855510576434" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.attributes.fileName]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="readData" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="f1e6a51c-c4cb-466f-9463-fd48ec520cd8" collection="#[payload]" >
+			<flow-ref doc:name="connector-versionsFlow" doc:id="45b9835a-fe46-4d99-90b0-bbb7ff79c828" name="connector-versionsFlow" />
+			<ee:transform doc:name="Convert To XML" doc:id="4fbc78f2-3e5e-47da-abe9-40ed461d526f" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.readData]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+vars."connector-latest-version" + vars."latest-version"]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="858ece4a-52a7-40ae-a417-3871890cd68c" message='#["Connector versions updated successfully"]' />
+		<ee:transform doc:name="Final Transformation" doc:id="4ff7a8de-c025-4c17-b940-0064c3a3ab4a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var filename = vars.fileName
+---
+filename map ((item, index) -> {
+	"applicationName" : item,
+	"connectors":  vars."connector-latest-version"[index]
+})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="update-single-connector-in-a-project-flow" doc:id="f65a0db3-6de6-46c4-baf0-a234d5253c37" >
+		<file:list doc:name="List" doc:id="d8ea635c-b380-40e0-a1b0-1ca9cbb3ded4" directoryPath="${secure::file.path}" />
+		<ee:transform doc:name="Stores fileNames" doc:id="ee25dc7b-0973-4e15-b052-13c30d0f9ef7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var projectname = vars.appName
+---
+payload.attributes.fileName filter (item) -> item == projectname]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="readData" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="e281f742-646b-4ae1-8f33-cde65e424786" collection="#[payload]" >
+			<flow-ref doc:name="connector-versionsFlow" doc:id="f55283ef-dc1c-4b7f-adce-9c3e0e25fd50" name="connector-versionsFlow" />
+			<ee:transform doc:name="readData to XML, connector-latest-version" doc:id="bf95b524-fdcf-4b78-935b-8e7a48e536fe" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+vars.readData]]></ee:set-payload>
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="connector-latest-version" ><![CDATA[%dw 2.0
+output application/json
+---
+vars."connector-latest-version" + vars."latest-version"
+]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<set-variable value='#[%dw 2.0&#10;output application/json&#10;var version = vars."latest-version"&#10;var id = vars.connectorName&#10;---&#10;if ((version filter $.connectorName == id)[0].latestVersionInExchange != "Unsupported")&#10;    (version filter $.connectorName == id)[0].latestVersionInExchange&#10;else &#10;    (version filter $.connectorName == id)[0].currentVersionInApi]' doc:name="latestVersion" doc:id="fc33f351-c7b5-4d9d-99b8-45431f48c485" variableName="latestVersion" />
+			<ee:transform doc:name="Updating dependencies with new version" doc:id="d82784b2-e6e2-4d4d-abbd-8f504d7ce5c1" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+var targetArtifactId = vars.connectorName
+var version = vars.latestVersion
+---
+payload update {
+    case .project.dependencies -> $
+        mapObject ((value, key) -> 
+            if (value.artifactId == targetArtifactId) 
+                (key): value update {
+                case .version -> version
+                }
+            else 
+                (key): value
+        )
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<file:write doc:name="Rewrite the pom file with latest version" doc:id="4dde16c2-2253-459b-870d-cf92432a9768" path="#[vars.path]" />
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="119200c8-a2c0-4aa1-bada-816d5a06c0bb" message='#["Connector versions updated successfully"]' />
+		<ee:transform doc:name="Final Transformation" doc:id="b737de0e-8831-413b-a838-ea343ad2cecc" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+"Connector versions updated successfully"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="get-latest-version-from-exchange-flow" doc:id="9e42a804-6f71-4000-ae5a-9b7da47f7de6" >
+		<ee:transform doc:name="pomContent" doc:id="0808b2e0-dfcc-4511-9247-bb89ca5519f7" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="pomContent" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Get Token Flow Reference" doc:id="956b197a-02ae-471f-b997-7b4e3c2fc767" name="api-call-coreservices-login-flow"/>
+		<set-variable value="#[payload.access_token]" doc:name="token" doc:id="805721c5-b8f4-4016-b20d-002e1b2f9482" variableName="token"/>
+		<ee:transform doc:name="dependencyList, method" doc:id="ae7bfe85-2578-4e36-b27f-7ebd558cfbb5">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="method"><![CDATA['GET']]></ee:set-variable>
+				<ee:set-variable variableName="dependencyList"><![CDATA[(vars.pomContent.project.dependencies.*dependency)]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="arr, connector-name" doc:id="a5b2a248-81c8-4277-9c10-1836654c5a5d">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="arr"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="connector-name"><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Call exchange api to get connector version" doc:id="308d9fce-763c-4ab8-9294-6a8d170c78aa" message="#['Call exchange api to get connector version']" />
+		<foreach doc:name="For Each" doc:id="a46ae7f9-35bb-4749-a96e-d08b392d4348" collection="#[vars.dependencyList]">
+			<ee:transform doc:name="requestUriPath, connector-name" doc:id="6b02ae20-e3f5-4da1-bbc3-289d4328ef2b">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="requestUriPath"><![CDATA['/exchange/api/v2/assets/' ++ payload.groupId ++ "/" ++ payload.artifactId ++ "/asset"]]></ee:set-variable>
+					<ee:set-variable variableName="connector-name"><![CDATA[%dw 2.0
+output application/json
+---
+vars."connector-name" + payload.artifactId]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<try doc:name="Try" doc:id="3b5adbb2-1e47-4a17-92f1-b57ba75b2dba">
+				<http:request method="#[vars.method]" doc:name="Gets Connector Latest Versions From Exchange" doc:id="3915e003-d626-4200-aa82-2c2a706ca5ec" config-ref="HTTP_Request_configuration" path="#[vars.requestUriPath]">
+					<http:headers><![CDATA[#[output application/java
+---
+{
+ "Authorization" : "Bearer "++ (vars.token as String)
+}]]]></http:headers>
+				</http:request>
+				<error-handler>
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f94f5465-fe81-42ed-8f01-5de8ea155bef">
+						<ee:transform doc:name="Transform Message" doc:id="dff8d959-855c-4a14-99c7-77aea64cf86b">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Error": error.detailedDescription
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<ee:transform doc:name="arr" doc:id="82fa255b-c739-40cd-8356-6df25226c370">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="arr"><![CDATA[ %dw 2.0
+output application/json
+---
+vars.arr ++ [payload]]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		</foreach>
+		<ee:transform doc:name="latest-version" doc:id="491c4188-2fc5-4abe-933c-958c9e777625">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="latest-version"><![CDATA[%dw 2.0
+output application/json
+var details = vars.dependencyList  map ((item, index) -> {
+ 
+"connectorName": item.artifactId,
+"connectorGroupName": item.groupId,
+"currentVersionInApi": ((item.version replace "\$" with "") replace "}" with "") replace "{" with "" ,
+"latestVersionInExchange": if(vars.arr[index].version == null) "Unsupported" else vars.arr[index].version,
+"Java 17": if ((vars.arr[index].attributes filter ($.key == "is-java-17-supported")).value[0] == "true" ) "Latest Version Supports Java 17" else "Latest Version Does Not Supports Java 17"
+})
+---
+details]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="final response" doc:id="845acf42-aa7c-4010-97be-4ccfe8439090" message="#['final response for connector version update']" />
+	</flow>
+	<flow name="connector-versionsFlow" doc:id="15ec467c-fb98-49ae-a9d5-acca6f6afe09" >
+		<ee:transform doc:name="path, fileName" doc:id="258e2197-66a7-4d43-a523-6b7d32e5f06c">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="fileName"><![CDATA[%dw 2.0
+output application/json
+---
+vars.fileName + payload]]></ee:set-variable>
+					<ee:set-variable variableName="path"><![CDATA[Mule::p('secure::file.path') ++ "/" ++ payload ++ "/pom.xml"]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="3976953e-8a6f-4633-9815-ebc3ede1e63c">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		<file:read doc:name="Read POM File Content" doc:id="7c3c78a9-1ced-496b-91cf-c895c5b0ff79" path="#[vars.path]" />
+		<ee:transform doc:name="readData" doc:id="75027d15-f4bb-4a86-97ff-8f19c186d621">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="readData"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		<flow-ref doc:name="get-latest-version-from-exchange-flow" doc:id="9ce49afb-3e49-4b1a-ba3b-7fbe1759be9d" name="get-latest-version-from-exchange-flow" />
+	</flow>
+</mule>

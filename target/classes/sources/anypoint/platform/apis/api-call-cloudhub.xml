@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+	<flow name="api-call-cloudhub-apps-flow" doc:id="f9a9f27c-b580-4ff8-acc2-e2a6682ff889" >
+		<logger level="DEBUG" doc:name="Logger" doc:id="0ce11ab0-2b56-4e5d-a9e5-b31c0ab1e91f" message="Calling Coreservices - check-Applications" />
+		<choice doc:name="Choice" doc:id="7279dd75-f360-46f1-8831-8afe7591b29f" >
+			<when expression='#[vars.appName != null and vars.status == null]'>
+				<ee:transform doc:name="Setting Path" doc:id="78b7f41b-e21f-47be-bb41-a052e3f15795">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="pathVairable" ><![CDATA[%dw 2.0
+output application/json
+---
+p("anypoint.platform.apis.cloudhub.apps.path") as String ++ "/" ++ vars.appName as String]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<try doc:name="Try" doc:id="c345bb40-56e7-4ba4-9eb9-493b5877570f" >
+					<http:request method="GET" doc:name="Get Applications For Environment" doc:id="61e10304-cd99-4298-b201-909f43998c1d" config-ref="HTTP_Request_configuration" path="#[vars.pathVairable]">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"X-ANYPNT-ORG-ID": vars.orgId,
+	"X-ANYPNT-ENV-ID": vars."envId"
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"orgId" : vars.orgId
+}]]]></http:uri-params>
+		</http:request>
+					<ee:transform doc:name="Transform Message" doc:id="a5217716-e48d-4311-ab4a-eb0bbc6f6a14">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[payload]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<flow-ref doc:name="cloudhub-output-transformation" doc:id="206f59cc-9fa9-4419-b13b-4346c1e77e46" name="cloudhub-output-transformation" />
+					<error-handler >
+						<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="44e35d0e-54fa-49e6-bf39-079d8355d39c" type="ANY">
+				<ee:transform doc:name="Transform Message" doc:id="b97249fa-af05-41a8-9572-f9a37d5e5c8c">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+					</error-handler>
+				</try>
+			</when>
+			<when expression='#[vars.appName != null and vars.status == "download"]'>
+				<flow-ref doc:name="download-jarFlow" doc:id="bb7bacf2-38eb-4cae-b8e9-5428f286f56a" name="download-jarFlow"/>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="get-cloudhub-cloudhub2.0-applications-flow" doc:id="30af1abb-f989-4caa-ac8f-7cc528cad3e3" name="get-cloudhub-cloudhub2.0-applications-flow"/>
+				<ee:transform doc:name="Transform Message" doc:id="727caae9-5e71-4b25-b238-1ea79b6a06ea">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload pluck ((value, key, index) -> (value.payload)))
+ ]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="cloudhub-output-transformation" doc:id="2bd9e5b5-b4de-4630-a04f-0be0e331238d" name="cloudhub-output-transformation" />
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="3b60abf6-2186-46f7-8cbe-d8c2fbd34de3" type="HTTP:UNAUTHORIZED">
+				<ee:transform doc:name="Transform Message" doc:id="14580e0a-9327-4a8d-92c6-ff0f7687c210" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="get-cloudhub-cloudhub2.0-applications-flow" doc:id="8ac88444-25ff-457c-ae9c-202c09243f41" >
+		<scatter-gather doc:name="Scatter-Gather" doc:id="0e0e4b7d-4ff2-4a60-bfba-1d7f2016e1a1" >
+			<route >
+				<http:request method="GET" doc:name="Get Cloud HUB Applications For Environment" doc:id="47ed02e7-f25a-441b-bd2d-ef70b103576d" config-ref="HTTP_Request_configuration" path="${anypoint.platform.apis.cloudhub.apps.path}" >
+					<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"X-ANYPNT-ORG-ID": payload.organizationId,
+	"X-ANYPNT-ENV-ID": payload.id
+	//"orgId" : payload.organizationId,
+	//"envId": payload.id
+}]]]></http:headers>
+					<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"orgId" : vars.orgId
+}]]]></http:uri-params>
+				</http:request>
+			</route>
+			<route >
+				<http:request method="GET" doc:name="Get Cloud HUB 2.0 Applications For Environment" doc:id="7d408e9a-f55e-4049-9f48-709abc1519f7" config-ref="HTTP_Request_configuration" path="${anypoint.platform.apis.cloudhub2.0.apps.path}" >
+					<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"X-ANYPNT-ORG-ID": payload.organizationId,
+	"X-ANYPNT-ENV-ID": payload.id
+	//"orgId" : payload.organizationId,
+	//"envId": payload.id
+}]]]></http:headers>
+				</http:request>
+				<ee:transform doc:name="Transform Message" doc:id="adcace32-66c8-4774-8766-3ee790e337da" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.data filter ((item, index) -> (item.target."type" ~= "MC") and (item.target.subtype != "runtime-fabric"))]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="environmentId" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.environments.id[0]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<foreach doc:name="For Each" doc:id="8c741427-e0ae-4d7b-afe9-a1af18df9901" collection="#[payload]" >
+					<ee:transform doc:name="setting request path" doc:id="346e2ae7-34c6-4c97-be41-9d5599caf59c" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="ch2path" ><![CDATA[%dw 2.0
+output application/java
+var environment= vars.environments filter ((item, index) -> item.name ~= vars.environmentName)
+---
+"/amc/adam/api/organizations/"++ vars.orgId ++"/environments/"++ environment.id[0] ++"/deployments/"++ payload.id]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<http:request method="GET" doc:name="Get Full Info About Cloud HUB 2.0 Applications For Environment" doc:id="bcb96552-4744-4b12-b9b8-222512f8efbb" config-ref="HTTP_Request_configuration" path="#[vars.ch2path]" >
+						<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"X-ANYPNT-ORG-ID": payload.organizationId,
+	"X-ANYPNT-ENV-ID": payload.id
+	//"orgId" : payload.organizationId,
+	//"envId": payload.id
+}]]]></http:headers>
+					</http:request>
+					<set-variable value="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.ch2Apps ++ [payload]]" doc:name="update ch2Apps" doc:id="bdc8ebe1-e1f9-4d67-92b4-33d658ef1a86" variableName="ch2Apps" />
+					<remove-variable doc:name="Remove ch2path" doc:id="44e01675-4800-4b30-b61f-cff9075154e8" variableName="ch2path" />
+				</foreach>
+				<ee:transform doc:name="Transform Message" doc:id="5eca6c7f-0da5-4e9a-b6ab-2fcdd2e93da1" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.ch2Apps]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<set-variable value="#[[]]" doc:name="Set ch2Apps" doc:id="5d7161d2-8cff-49f7-897d-0a4feb2716b6" variableName="ch2Apps" />
+			</route>
+		</scatter-gather>
+	</flow>
+	<sub-flow name="cloudhub-output-transformation" doc:id="8ec2aafd-70ea-4de1-b9f6-a7e21b6f4a3e" >
+		<ee:transform doc:name="Adding envName" doc:id="6b2aa3a3-e773-4445-b5f5-c2c0a207eb93">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (isEmpty(payload) == true) {} else (payload map ($ ++
+    {
+        envName: vars.environmentName
+    }
+))]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Mapping Required Data" doc:id="7c6bd914-a5ab-463e-a0fb-1fc3880a0d7f">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (isEmpty(payload) == true) {} else (payload map
+{
+    appName: if($.target.provider == "MC") $.name else ($.domain),
+    businessGroup: vars.orgName,
+    environment: $.envName,
+    target: if($.target.provider == "MC") $.target.provider else "CLOUDHUB",
+    runtimeVersion: if($.target.provider == "MC") $.target.deploymentSettings.runtimeVersion else $.muleVersion.version,
+    numberOfWorkers: if($.target.provider == "MC") $.target.replicas else  $.workers.amount,
+    sizeOfWorkers: if($.target.provider == "MC") $.application.vCores else  $.workers."type".weight,
+    status: if($.target.provider == "MC") $.application.status else $.status
+}filter ($.appName !=null))]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<choice doc:name="Choice" doc:id="19b491f1-6df7-484d-be30-00626ce0707a">
+			<when expression="#[vars.listOfApplications == {}]">
+				<ee:transform doc:name="listOfApplications" doc:id="0d3bd9d3-91e1-4fd4-89d0-7c4912c24f3f">
+					<ee:message />
+					<ee:variables>
+						<ee:set-variable variableName="listOfApplications"><![CDATA[%dw 2.0
+output application/json
+---
+if(payload == {}) [vars.listOfApplications] else payload ++ [vars.listOfApplications]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="listOfApplications" doc:id="614280a1-9640-4b5f-9d84-db8cec93ccd9">
+					<ee:message />
+					<ee:variables>
+						<ee:set-variable variableName="listOfApplications"><![CDATA[%dw 2.0
+output application/json
+---
+if(payload == {}) vars.listOfApplications else payload ++ vars.listOfApplications]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</otherwise>
+		</choice>
+		<ee:transform doc:name="listOfApplications" doc:id="3af78699-e55a-4849-8db0-5d286b35645a">
+					<ee:message>
+					</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="listOfApplications"><![CDATA[%dw 2.0
+output application/json
+---
+vars.listOfApplications filter ($ !={})]]></ee:set-variable>
+			</ee:variables>
+				</ee:transform>
+		<ee:transform doc:name="assetId" doc:id="df21a4e3-e0cf-4daf-a65e-1038b29b5d6e" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="assetId" ><![CDATA[%dw 2.0
+output application/json
+var orgName = vars.orgName
+var data = (vars.listOfApplications filter ((item, index) -> item.businessGroup == orgName)).appName
+---
+data]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</sub-flow>
+
+
+
+</mule>

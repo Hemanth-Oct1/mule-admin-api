@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<flow name="download-jarFlow" doc:id="e1036d16-f497-41bb-9a22-4efb45d5739f" >
+		<ee:transform doc:name="path" doc:id="bc5049cb-fa4c-452c-978b-a3aa3f6c6314" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="path" ><![CDATA[%dw 2.0
+output application/java
+---
+Mule::p("anypoint.platform.apis.cloudhub.download.app.path") as String ++ "/" ++ vars.appName as String ++ "/" ++ "download" ++ "/" ++ vars.appName as String]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<try doc:name="Try" doc:id="c4430a18-277a-4b3c-be45-9c042a1ba8cf" >
+			<http:request method="GET" doc:name="Request" doc:id="8830f852-ef8c-4c95-89b6-abc74bf63074" config-ref="HTTP_Request_configuration" path="#[vars.path]" target="finalOutput">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token,
+	"X-ANYPNT-ORG-ID": vars.orgId,
+	"X-ANYPNT-ENV-ID": vars."envId"
+}]]]></http:headers>
+		</http:request>
+			<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;vars.statusCode + "200"]' doc:name="statusCode" doc:id="f014eaa4-869b-403a-aaee-0a69675db965" variableName="statusCode" />
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="6a963840-132e-4dd6-aba2-72337ece8acb" type="ANY">
+					<ee:transform doc:name="Transform Message" doc:id="467735ab-e0a1-41ee-a4bd-93fba48db035" >
+						<ee:message >
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="error" ><![CDATA[%dw 2.0
+output application/json
+---
+error.detailedDescription]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;vars.statusCode + "404"]' doc:name="statusCode" doc:id="cb072aa4-6b3c-4262-a3dc-2e02f9b8a4ac" variableName="statusCode" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<set-variable value="#[vars.statusCode]" doc:name="statusCode" doc:id="89ddaaad-ddec-48b5-b3c6-2d64aaaf54c2" variableName="statusCode" />
+	
+</flow>
+	<!-- [STUDIO:"scheduler-deleteFlow"]<flow name="scheduler-deleteFlow" doc:id="c01ab485-20ae-4da1-9c39-65625302ba56" initialState="stopped">
+		<scheduler doc:name="Scheduler" doc:id="d0dc39ac-28e2-4a93-a85d-8c1a60f9d06f" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="3" timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<file:list doc:id="3091d2d5-cde0-480e-b94c-a744146b1004" directoryPath="/tmp/jars/" doc:name="List" />
+		<ee:transform doc:name="Transform Message" doc:id="aea11e96-0fd2-4b27-b4ca-13baab823da7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+&#45;&#45;-
+payload&#93;&#93;></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="25943eb2-5252-48b9-922a-30d610db916a" collection="#[payload.attributes&#93;" >
+			<ee:transform doc:name="Transform Message" doc:id="ff76af50-88ce-4270-8a2f-edc9db4d9085" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/java
+&#45;&#45;-
+payload.fileName&#93;&#93;></ee:set-variable>
+					<ee:set-variable variableName="lastUpdatedTime" ><![CDATA[%dw 2.0
+output application/java
+&#45;&#45;-
+payload.lastModifiedTime&#93;&#93;></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="Transform Message" doc:id="510d8127-7d3b-4160-a3f4-baf4230fc89f" >
+				<ee:message />
+				<ee:variables >
+					<ee:set-variable variableName="lastUpdatedTime" ><![CDATA[%dw 2.0
+output application/json
+var duration = now() - "2025-01-07T09:30:10.4461863"
+var hours = if(duration.hours != null) (duration).hours * 60 else 0
+var min = if(duration.minutes != null) (duration).minutes else 0
+&#45;&#45;-
+hours + min&#93;&#93;></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<choice doc:name="Choice" doc:id="90914fd2-7ee8-4428-8149-c2ae35f0ad66" >
+				<when expression="#[vars.lastUpdatedTime &gt;= 3&#93;" >
+					<ee:transform doc:name="Transform Message" doc:id="db9b48bb-f5c3-4929-b980-4cad287d5f8b" >
+						<ee:message >
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="path" ><![CDATA[%dw 2.0
+output application/json
+&#45;&#45;-
+"/" ++ "tmp" ++ "/" ++ "jars" ++ "/" ++ vars.fileName&#93;&#93;></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<file:delete doc:name="Delete" doc:id="87fb3b08-28c0-4602-b130-aa3cb73c19ed" path="#[vars.path&#93;"/>
+					<logger level="INFO" doc:name="Logger" doc:id="44e245f1-0345-475a-8240-656a603b7772" message='#[vars.fileName ++ " Deleted Successfully"&#93;'/>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="bce21fb3-74e6-4b43-a2b9-64147531e787" message='#[vars.fileName ++ " file is downloaded recently"&#93;'/>
+				</otherwise>
+			</choice>
+		</foreach>
+	</flow> [STUDIO] -->
+</mule>

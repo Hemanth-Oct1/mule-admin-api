@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="api-detailsFlow" doc:id="653137b5-47c8-42c3-971b-947b1097e441" >
+		<flow-ref doc:name="api-call-api-manager-apis-flow" doc:id="29843f6d-8775-4868-8c90-c77a97a0a550" name="api-call-api-manager-apis-flow"/>
+		<ee:transform doc:name="Mapping Required Data" doc:id="08f76dd8-90c3-4f13-a7eb-856d35834d7a" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.assets map ((item, index) -> {
+    "id": item.apis.id[0],
+    "assetId": item.assetId,
+    "assetVersion": item.apis.assetVersion[0],
+    "status": item.apis.status[0],
+    "environmentName": vars.environmentName,
+    "bussinessGroupName": vars.orgName,
+    "autodiscoveryApiName": item.autodiscoveryApiName,
+    "environmentId": vars.envId,
+    "organizationId": vars.orgId
+})]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="environmentId" ><![CDATA[%dw 2.0
+output application/json
+---
+((payload.assets.apis flatMap ((item, index) -> item)).environmentId distinctBy ((item, index) -> item))[0]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="apiDetails, apiId" doc:id="b9593b9e-ddfc-4afc-9965-1b35c3b7b4b7" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="apiId" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.id]]></ee:set-variable>
+				<ee:set-variable variableName="apiDetails" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.apiDetails + payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<set-variable value='#[%dw 2.0&#10;output application/json&#10;var orgName = vars.orgName&#10;---&#10;(flatten(vars.apiDetails) filter ((item, index) -&gt; item.bussinessGroupName == orgName)).assetId]' doc:name="assetId" doc:id="1d639a67-8a39-4137-8f2d-bbc365c1ff43" variableName="assetId"/>
+		<choice doc:name="Choice" doc:id="6d22936f-275f-4f43-bbe5-352d1258443f" >
+			<when expression='#[vars.data.assets != []]'>
+				<flow-ref doc:name="api-call-api-manager-api-policies-flow" doc:id="0fb00df8-498e-4f79-b575-59debab18131" name="api-call-api-manager-api-policies-flow"/>
+				<ee:transform doc:name="policies" doc:id="dc96cab9-7827-42c2-b115-0dc81fb9ba8e">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="policies" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.policies]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<flow-ref doc:name="api-call-api-manager-automated-policies-flow" doc:id="3d2448fa-73b3-4c0d-8114-c0dcc6de9ad6" name="api-call-api-manager-automated-policies-flow" />
+				<ee:transform doc:name="automatedPolicies" doc:id="da0807fb-b437-4ce4-a6ae-981ec70ce499">
+					<ee:message />
+					<ee:variables>
+								<ee:set-variable variableName="automatedPolicies"><![CDATA[%dw 2.0
+output application/json
+---
+vars.automatedPolicies]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="689a81a1-6232-40b7-86ed-1d775285e370" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"environmentName": vars.environmentName,
+    "bussinessGroupName": vars.orgName,
+	"appDetails": "No Applications",
+	"policies": "No Policies",
+	"automatedPolicies": "No Automated Policies"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

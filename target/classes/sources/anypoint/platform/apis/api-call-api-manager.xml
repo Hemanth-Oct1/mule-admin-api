@@ -1,0 +1,568 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+	<flow name="api-call-api-manager-apis-flow" doc:id="cb45e4dc-7fd3-476d-aff3-7c0a30556088"
+		maxConcurrency="${anypoint.platform.apis.apiManager.maxConcurrency}">
+		<logger level="DEBUG" doc:name="Logger" doc:id="c04d063d-9f26-41c8-9f2c-efd64bc5a457" message="Calling API Manager - APIs" />
+		<ee:transform doc:name="offset" doc:id="c13c0763-5f72-41cb-9c03-c99cf11d9b2f">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable resource="dw/anypoint/save-offset-var.dwl" variableName="offset" />
+			</ee:variables>
+		</ee:transform>
+		<http:request method="GET" doc:name="Get APIs For Environment" doc:id="ea3a4010-08c1-44e9-b9d4-a82201dbb162"
+			config-ref="HTTP_Request_configuration" path="${anypoint.platform.apis.apiManager.apis.path}" target="data">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"orgId" : vars.orgId,
+	"envId" : vars.envId
+}]]]></http:uri-params>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	offset : vars.offset
+}]]]></http:query-params>
+		</http:request>
+		<logger level="DEBUG" doc:name="Logger" doc:id="44625425-13b2-42b6-9886-1bbbe2de07fb" message='#["API Manager - APIs, Response Status Code:" ++ attributes.statusCode]' />
+		<ee:transform doc:name="Transform Message" doc:id="273ef80f-85c4-49bf-89ec-a91b0f24bd20" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.data]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	
+</flow>
+
+	<flow name="api-call-api-manager-api-policies-flow" doc:id="392b0852-86a0-4067-bab6-7b5f55855136"
+		maxConcurrency="${anypoint.platform.apis.apiManager.maxConcurrency}">
+		<logger level="DEBUG" doc:name="Log - Call APIM " doc:id="19b1b41d-e3f3-40bf-a39d-2fbdfc8e2738"
+			message="Calling API Manager - API Policies" />
+		<parallel-foreach doc:name="Parallel For Each" doc:id="e04e1c03-abfa-44f6-9a2a-aebf726dc631" collection="#[vars.apiId]" target="policy">
+			<until-successful maxRetries="${anypoint.platform.apis.apiManager.apiPolicies.retries.max}" doc:name="Until Successful" doc:id="bb0f3611-9f0e-43bb-bbc9-efb617ca214e" millisBetweenRetries="${anypoint.platform.apis.apiManager.apiPolicies.retries.wait}">
+			<ee:transform doc:name="apiId" doc:id="5ac1ea93-8083-441b-8729-38ac3c334a7d">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="apiId"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<http:request method="GET" doc:name="Get API Policies" doc:id="d5c85809-9166-498c-babc-e74cd8a8a886" config-ref="HTTP_Request_configuration" path="${anypoint.platform.apis.apiManager.apiPolicies.path}">
+				<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+				<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"orgId" : vars.orgId,
+	"apiId" : payload,
+	"envId" : vars.environmentId
+}]]]></http:uri-params>
+				<http:query-params><![CDATA[#[output application/java
+---
+{
+	"includeProxyTemplate" : true,
+	"includeTlsContexts" : true,
+	"includeValidation" : true
+}]]]></http:query-params>
+			</http:request>
+				<ee:transform doc:name="Transform Message" doc:id="e348565f-c9ea-448f-a1ad-51ea8b2c5170">
+			<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var ids = {
+    "id": vars.apiId
+}
+---
+ if(typeOf(payload) as String == "Object") (payload ++ ids) else ({"policies":[]} ++ ids)]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+			</ee:variables>
+		</ee:transform>
+		
+</until-successful>
+		</parallel-foreach>
+		<ee:transform doc:name="policies" doc:id="4fee2bb5-bfaf-4a9f-b70b-f68aff00a116">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="policies"><![CDATA[%dw 2.0
+output application/json
+---
+vars.policies + vars.policy.payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+		<logger level="DEBUG" doc:name="Logger" doc:id="3099c073-7970-440a-8683-90ecfe96a6d5"
+			message='#["API Manager - API Policies, Response Status Code:" ++ attributes.statusCode]' />
+	
+</flow>
+	<flow name="api-call-api-manager-automated-policies-flow" doc:id="42654c28-a89d-4de6-88ba-dc0fb72281a8"
+		maxConcurrency="${anypoint.platform.apis.apiManager.maxConcurrency}">
+		<logger level="DEBUG" doc:name="Logger" doc:id="72a5e4e6-06fc-40d8-a9c8-b52535a58743"
+			message="Calling API Manager - Automated Policies" />
+		<http:request method="GET" doc:name="Get Automated Policies" doc:id="12594095-06f6-4b7a-af6d-5b3150abe1af"
+			config-ref="HTTP_Request_configuration" path="${anypoint.platform.apis.apiManager.automatedPolicies.path}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"orgId" : vars.orgId
+}]]]></http:uri-params>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"environmentId" : vars.environmentId
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="59f46bed-8d6f-440e-9561-4eb19d2fddb4">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload ++ {
+	"environmentName": vars.environmentName,
+    "bussinessGroupName": vars.orgName,
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables />
+		</ee:transform>
+		<ee:transform doc:name="automatedPolicies" doc:id="a9445af4-006b-484a-a1c4-e47d7f561d66">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="automatedPolicies" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.automatedPolicies + payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="DEBUG" doc:name="Logger" doc:id="8bea20cb-7931-4eab-a8d2-fc8ab94ec08c"
+			message='#["API Manager - Automated Policies, Response Status Code:" ++ attributes.statusCode]' />
+	
+</flow>
+	<flow name="api-call-api-manager-client-applications" doc:id="973d81f9-05d3-43af-b1a0-9b784805d72b" >
+		<foreach doc:name="For Each" doc:id="21cdefaa-150b-45b7-ae15-691d5446baf3" collection="#[vars.environments]">
+			<ee:transform doc:name="path, envId" doc:id="f4bc465e-b0a6-4843-a2ff-18f83c7d0324">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="path"><![CDATA[%dw 2.0
+output application/java
+---
+"/apimanager/xapi/v1/organizations/" ++ vars.orgId ++ "/environments/" ++ payload.id ++ "/apis?sort=name&ascending=true"]]></ee:set-variable>
+					<ee:set-variable variableName="envId" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.id]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<try doc:name="Try" doc:id="dc5a65a4-3f28-4cb5-9e0d-d4fa6515a7a8" >
+				<http:request method="GET" doc:name="Get APIs For Environment" doc:id="cd880b2f-cbc1-4d4c-9d44-408a454d923c" config-ref="HTTP_Request_configuration" path="#[vars.path]">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+		</http:request>
+				<error-handler >
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="1fc704c0-51c2-4cd8-ba86-b7c5075301af" >
+						<ee:transform doc:name="Transform Message" doc:id="3a7de912-802c-4fa0-a2ae-b579448c882a" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars."api-id" ++ " not found"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<ee:transform doc:name="data" doc:id="73d79167-b216-4767-902a-a3ff8479c2d6" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="data" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.data + payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="apiData" doc:id="ec99b3ee-475c-4e6e-8459-eb1facb626c0" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="apiData" ><![CDATA[%dw 2.0
+output application/json
+var apiId = vars."api-id" as Number
+---
+payload.instances filter ((item, index) -> item.id == apiId)]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="assetId" doc:id="dfd0959f-2e68-4b60-a26c-d81c22eee4a7" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="assetId" ><![CDATA[%dw 2.0
+output application/json
+var apiId = vars."api-id" as Number
+---
+(flatten(vars.data.instances) filter ((item, index) -> item.id == apiId)).assetId]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<choice doc:name="Choice" doc:id="252e582e-ab09-4382-934d-39f8e5930ccd" >
+				<when expression="#[!isEmpty(vars.apiData)]">
+					<ee:transform doc:name="Setting Path" doc:id="30f5002b-b17e-4023-8928-5d3de459987e">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="contractsPath"><![CDATA[%dw 2.0
+output application/json
+---
+"/apimanager/xapi/v1/organizations/" ++ vars.orgId ++ "/environments/" ++ vars.envId ++ "/apis/" ++ vars."api-id" ++ "/contracts?sort=name&ascending=true"]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+					<try doc:name="Try" doc:id="7711e220-6b11-46f8-bc8d-9dc219b762de">
+				<http:request method="GET" doc:name="Get API Contracts" doc:id="bed239bf-278b-4385-ae29-0520a55c4685" config-ref="HTTP_Request_configuration" path="#[vars.contractsPath]">
+					<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+				</http:request>
+				<ee:transform doc:name="contracts" doc:id="90f9fd4a-115a-4fcb-8323-3626b124c250" >
+							<ee:message >
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="contracts" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.contracts]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<ee:transform doc:name="Transform Message" doc:id="bd441ef3-8002-495e-ad5d-01f660548536" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.contracts]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<flow-ref doc:name="api-call-api-manager-clientAppsFlow" doc:id="48a215e6-4162-4e90-95ff-c9ce73fa9949" name="api-call-api-manager-clientAppsFlow"/>
+						<ee:transform doc:name="Transform Message" doc:id="815bc6c0-84b2-4216-a1d1-868deb101735" >
+							<ee:message >
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="clientApps" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "NumberOfClientApplications": sizeOf(payload),
+    "clientApps": vars.clientApps map ((item, index) -> {
+    "id": item.id,
+    "clientAppName": item.name,
+    "owner": item.owner,
+    "email": item.email,
+    "clientId": item.clientId,
+    "clientSecret": item.clientSecret
+})
+}]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<error-handler>
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="d6817070-869f-4546-b983-d63bab3f86f0">
+						<ee:transform doc:name="Transform Message" doc:id="530ea352-cf3e-416f-a520-1ff1f153ab26">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars."api-id" ++ " not found"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+				</when>
+				<otherwise>
+					<ee:transform doc:name="Transform Message" doc:id="3fb2fe8d-6a89-4255-a456-2ff36becc653" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars."api-id" ++ " has no contracts"]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</otherwise>
+			</choice>
+		</foreach>
+	</flow>
+	<flow name="api-call-api-manager-contracts" doc:id="bc2558ae-9be6-4864-bc09-ef3ca7b95ebd" >
+		<ee:transform doc:name="Transform Message" doc:id="44131e64-3df8-4889-b21c-128f761fc262" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var flatdetails = flatten(flatten(payload.appDetails))
+var policies = flatten(flatten(payload.policies))
+var autopolicies = flatten(flatten(payload.automatedPolicies))
+var apiDetails = flatdetails map ((item, index) -> {
+    (item),
+    policies: flatten((policies filter ((item1, index) -> item.id contains item1.id)).policies) ,
+    automatedPolicies: flatten((autopolicies filter ((item2, index2) -> (item.environmentName contains item2.environmentName) and (item.bussinessGroupName contains item2.bussinessGroupName))).automatedPolicies) 
+})
+var bg = flatten(flatten(payload.appDetails)) map ((item, index) -> item.bussinessGroupName) distinctBy ((item, index) -> item)
+var env = flatten(flatten(payload.appDetails)) map ((item, index) -> item.environmentName)
+---
+{   
+    businessGroups: bg map
+    {
+        businessGroup: $,
+        environments: (flatten(env map ((item, index) -> apiDetails)) filter ((item, index) -> ($ contains item.bussinessGroupName) and (env contains item.environmentName)) map ((item, index) -> item.environmentName)) distinctBy ((item, index) -> item) map ((item, index) ->{
+            environment: item,
+            apis: apiDetails filter ((item1, index) -> ($ contains item1.bussinessGroupName) and (item contains item1.environmentName))
+        } )
+    }
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+			</ee:variables>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="5f37e9ee-c777-4f7b-b674-8d151f399d93" collection="#[(flatten((flatten(payload.businessGroups.environments)).apis))]" target="contract">
+			<ee:transform doc:name="path, inputs" doc:id="11fec82c-abd0-4f1b-b0dc-0d80ce3244d5">
+			<ee:message />
+			<ee:variables>
+				<ee:set-variable variableName="path"><![CDATA[%dw 2.0
+output application/json
+---
+"/apimanager/xapi/v1/organizations/" ++ payload.organizationId ++ "/environments/" ++ payload.environmentId ++ "/apis/" ++ payload.id ++ "/contracts?sort=name&ascending=true"]]></ee:set-variable>
+					<ee:set-variable variableName="inputs"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			<try doc:name="Try" doc:id="2d727ec3-46f4-42cd-bef1-5e6c4eb158d6">
+				<http:request method="GET" doc:name="Get Contracts For An API" doc:id="4cb4061b-6cdf-48c0-b918-f0f07bec0985" path="#[vars.path]" config-ref="HTTP_Request_configuration">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+		</http:request>
+				<error-handler>
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="3aa7e26e-ced1-45bd-a047-e8f911dfc042">
+						<ee:transform doc:name="Transform Message" doc:id="0f2ec78e-5161-4a57-a3d1-d707864287bf">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload.id ++ " dosen't contain any contracts"]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+			<ee:transform doc:name="Transform Message" doc:id="2b086fd7-3a5a-4e0a-98c8-97294bc3a781" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload.contracts]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<flow-ref doc:name="api-call-api-manager-clientAppsFlow" doc:id="4fad7c60-db7f-435f-a8ce-9e87ebca4a23" name="api-call-api-manager-clientAppsFlow"/>
+			<ee:transform doc:name="Transform Message" doc:id="75b46264-321b-4b08-9604-9bea126f8536">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<ee:transform doc:name="inputs" doc:id="f5801326-4d1a-4d98-abb3-b85f2cab636b">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="inputs"><![CDATA[%dw 2.0
+output application/json
+---
+vars.inputs ++ {
+    "NumberOfClientApplications": sizeOf(payload),
+    "clientApps": vars.clientApps map ((item, index) -> {
+    "id": item.id,
+    "clientAppName": item.name,
+    "owner": item.owner,
+    "email": item.email,
+    "clientId": item.clientId,
+    "clientSecret": item.clientSecret
+})
+}
+
+//vars.inputs ++ { "clientApps": {
+//    "NumberOfClientApplications": payload.total,
+//    "ClientAppName": payload.contracts.application.name default ""
+//}}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="Transform Message" doc:id="a15f2200-a4c1-4185-95f8-e9b70f34d16c">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.inputs]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<set-variable value="#[[]]" doc:name="Set clientApps" doc:id="27564682-ce54-4bd7-ad05-c7c5438a1e7c" variableName="clientApps"/>
+			<remove-variable doc:name="Remove inputs" doc:id="8b172788-6c90-4031-99a5-b2c2b84c768f" variableName="inputs" />
+		</parallel-foreach>
+		<ee:transform doc:name="contracts" doc:id="7cfe7eb3-e1d1-4015-a9a7-49ea94c19b61">
+			<ee:message />
+			<ee:variables>
+					<ee:set-variable variableName="contracts"><![CDATA[%dw 2.0
+output application/json
+---
+vars.contracts + vars.contract.payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="9ccbdfdd-ec50-45dd-8fce-4a169502a7ef" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload update {
+    case .businessGroups -> $ map ((item, index) -> item  update {
+        case .environments -> $ map ((item1, index) -> item1  update {
+            case .apis -> flatten(vars.contracts) filter ((item2, index) -> ($.bussinessGroupName contains item2.bussinessGroupName) and ($.environmentName contains item2.environmentName)) map ((item, index) -> item -- ["bussinessGroupName", "environmentName", "environmentId", "organizationId"] ++ {
+    ownerName: (vars.exchangeOwnerName filter (entry) -> entry.appName == item.assetId)[0].ownerName
+  } ++ {
+    squad: (vars.exchangeOwnerName filter (entry) -> entry.appName == item.assetId)[0].squad
+  } ++ {
+    managerName: (vars.exchangeOwnerName filter (entry) -> entry.appName == item.assetId)[0].managerName
+  }) 
+        } )
+    })
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables />
+		</ee:transform>
+	</flow>
+	<flow name="api-call-exchange-detailsFlow" doc:id="bfeea257-d7d4-42bf-9209-9c97cf20d47b" >
+		<ee:transform doc:name="Setting Path" doc:id="bca21d85-e740-4cab-a442-9de923ed5f8d">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="path"><![CDATA[%dw 2.0
+output application/json
+---
+"/exchange/api/v2/assets?search=&types=api-group&types=connector&types=custom&types=example&types=extension&types=http-api&types=policy&types=raml-fragment&types=rest-api&types=soap-api&types=template&domain=&organizationId=" ++ vars.orgId ++ "&masterOrganizationId=&offset=0&limit=250&sharedWithMe=&includeSnapshots=true"]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		<try doc:name="Try" doc:id="7fbbe14b-fd02-4d41-b494-983c8bb73eba">
+				<http:request method="GET" doc:name="Get Exchange Details For Organization" doc:id="0a45d593-dd4c-4819-bbb6-49e8aa7fb9db" config-ref="HTTP_Request_configuration" path="#[vars.path]">
+					<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+				</http:request>
+				<ee:transform doc:name="Transform Message" doc:id="dce112b4-5218-4b91-86ec-b38e7e020d4f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var data = vars.assetId
+---
+flatten(data map ((item, index) -> payload filter ((item1, index) -> item1.assetId == if(item contains "-uat") item splitBy "-uat" joinBy "" else if(item contains "-dev") item splitBy "-dev" joinBy "" else if(item contains "-prd") item splitBy "-prd" joinBy "" else if(item contains "-tst") item splitBy "-tst" joinBy "" else item)) map ((item2, index) -> if(item2 == []) item2 + {"appName": data[index],
+"ownerName": "Mule Administrator", "squad": "No squad", "managerName": "No manager"} else {"appName": data[index],"ownerName": if(item2[0].categories == []) item2[0].createdBy.firstName ++ " " ++ item2[0].createdBy.lastName else if (item2[0].categories.displayName contains "Asset Owner") flatten((item2[0].categories filter ((item3) -> item3.displayName == "Asset Owner")).value) joinBy "," else item2[0].createdBy.firstName ++ " " ++ item2[0].createdBy.lastName, "squad": flatten((item2[0].categories filter ((item3) -> item3.displayName == "Squad")).value) joinBy "," default "No squad", "managerName": flatten((item2[0].categories filter ((item3) -> item3.displayName == "Manager")).value) joinBy "," default "No manager" }
+ ))]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<error-handler>
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="a4337e2e-f531-4f0c-be64-5f104cb2a56f">
+						<ee:transform doc:name="Transform Message" doc:id="772d21c2-be23-4ea6-962b-9b23c063c462">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"ownerName": "Mule Administrator",
+"assetId": vars.assetIds}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+					</on-error-continue>
+				</error-handler>
+			</try>
+		<ee:transform doc:name="exchangeOwnerName" doc:id="cf102fe5-b6f7-4d61-81e8-18c979cad8ef">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/json
+---
+vars.exchangeOwnerName + payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+		<ee:transform doc:name="exchangeOwnerName" doc:id="5709e1f3-c66c-41ee-8916-72a25ca1422f" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="exchangeOwnerName" ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(vars.exchangeOwnerName filter ((item, index) -> item != null))]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+	</flow>
+	<flow name="api-call-api-manager-clientAppsFlow" doc:id="f8ba38e3-9aeb-449a-863b-c41e501737d5" >
+		<choice doc:name="Choice" doc:id="021b7418-388c-42b0-b5c4-850739109461">
+				<when expression="#[!isEmpty(payload)]">
+					<foreach doc:name="For Each" doc:id="ad7f9509-e693-4640-b357-f0a5aa6ff915" collection="#[payload.applicationId]">
+				<ee:transform doc:name="Transform Message" doc:id="99f48928-acd6-4780-aa26-27e2f7e184ae">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="clientAppPath"><![CDATA[%dw 2.0
+output application/json
+---
+"/apiplatform/repository/v2/organizations/" ++ vars.orgId ++ "/applications/" ++ payload ++ "?ascending=true&filter=all&literalMatch=true&sort=name&targetAdminSite=true"]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<http:request method="GET" doc:name="Request" doc:id="29eab22d-98a9-44d4-8c3e-1a53530e566f" config-ref="HTTP_Request_configuration" path="#[vars.clientAppPath]">
+					<http:headers><![CDATA[#[output application/java
+---
+{
+	"Authorization" : "Bearer " ++ vars.token
+}]]]></http:headers>
+				</http:request>
+				<ee:transform doc:name="Transform Message" doc:id="d93a14eb-e738-4213-add4-de22956a3313">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="clientApps"><![CDATA[%dw 2.0
+output application/json
+---
+vars.clientApps + payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+			</foreach>
+				</when>
+			</choice>
+	</flow>
+
+</mule>

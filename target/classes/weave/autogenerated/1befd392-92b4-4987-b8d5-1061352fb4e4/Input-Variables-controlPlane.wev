@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_1befd392_92b4_4987_b8d5_1061352fb4e4_Input_Variables_controlPlane = String
+

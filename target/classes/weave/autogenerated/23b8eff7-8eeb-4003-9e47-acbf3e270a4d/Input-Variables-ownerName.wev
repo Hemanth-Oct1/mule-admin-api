@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_23b8eff7_8eeb_4003_9e47_acbf3e270a4d_Input_Variables_ownerName = String
+

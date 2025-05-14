@@ -1,0 +1,871 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd ">
+    <flow name="mule-admin-api-main">
+        <http:listener config-ref="mule-admin-api-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[output application/java
+---
+{
+	"Access-Control-Allow-Origin" : "*",
+	"Access-Control-Allow-Methods" : "GET,POST,OPTIONS",
+	"Access-Control-Allow-Headers" : "Content-Type,Authorization"
+}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="mule-admin-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="mule-admin-api-console">
+        <http:listener config-ref="mule-admin-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="mule-admin-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="get:\connector-version\all-applications-connectors-update:mule-admin-api-config">
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="6efb1838-8387-4f53-813f-fb77db835601">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="766a9359-da6e-4771-895c-3575f4bd0b23" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="update-all-connector-in-all-projects-flow" doc:id="1ceacd39-df02-4ea4-90b4-98864998bbe5" name="update-all-connectors-in-all-applications-flow" />
+    </flow>
+    <flow name="get:\platform-metrics\api-manager\api-details:mule-admin-api-config" doc:id="7d084cfd-af0f-4210-8634-74fa5f5cd2ff">
+        <ee:transform doc:name="Setting Vars" doc:id="36e2cebb-6612-43ba-9aa8-e5ac8b328c8c">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="policies"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="automatedPolicies"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"APIManager"]]></ee:set-variable>
+                <ee:set-variable variableName="apiDetails"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="finalidata"><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="client-applications"><![CDATA[%dw 2.0
+output application/json
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="contracts"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="clientApps"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="dd94e6f8-3a29-4f04-95b1-965e6f62d4bb">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="aedc83f9-f629-4f3c-980a-8188321384ab" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="Aggregator Master Flow Reference" doc:id="b85461d1-1be4-4463-ac86-c7943ae8525e" name="aggregator-platform-metrics-master-flow" />
+        <ee:transform doc:name="Transform Message" doc:id="86e20f68-e34f-4120-8e7d-c4cc800ec215">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="finalidata"><![CDATA[%dw 2.0
+output application/json
+---
+vars.finalidata + {
+	"appDetails": vars.apiDetails,
+	"policies": vars.policies,
+	"automatedPolicies": vars.automatedPolicies
+}]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Final Data" doc:id="da939b00-4522-4294-8572-6e7019100f96">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.finalidata]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="api-call-api-manager-contracts" doc:id="3eee88ac-bf3f-45bf-972c-44d6f5a28b81" name="api-call-api-manager-contracts" />
+    </flow>
+    <flow name="get:\connector-version\applications:mule-admin-api-config">
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="977c0a2a-42c8-44ed-b066-52fe1083f2ec">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="df1c97e1-d95b-416c-a279-8a8af0300ff2" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="get-all-application-details-flow" doc:id="b79cca4f-9733-474a-830f-d59a838c6d1e" name="get-all-application-details-flow" />
+    </flow>
+    <flow name="get:\platform-metrics\send-report:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="8a7483a3-9334-4578-8c1a-7d31c536a53a">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.controlPlane as String]]></ee:set-variable>
+                <ee:set-variable variableName="owner-name"><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.ownerName as String default null]]></ee:set-variable>
+                <ee:set-variable variableName="managerName"><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.managerName as String default null]]></ee:set-variable>
+                <ee:set-variable variableName="response"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <flow-ref doc:name="send-report-ownerNameFlow" doc:id="2c65f715-557e-46dd-9d6e-d074c3809a8f" name="send-report-ownerNameFlow" />
+    </flow>
+    <flow name="get:\platform-metrics\api-manager\client-applications\(api-id):mule-admin-api-config">
+        <ee:transform doc:name="api-id uriParam" doc:id="8dce68f9-eb5f-4081-8bfe-fb45b3f57dfb">
+            <ee:variables>
+                <ee:set-variable variableName="api-id"><![CDATA[attributes.uriParams.'api-id']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Vars" doc:id="fc23a076-261a-4f27-ba4d-e5cc7b2021dc">
+            <ee:variables>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="contracts"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="data"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="clientApps"><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="be07d73c-2e98-44bf-af76-25e9b844bf1d">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="0a67b43e-48f3-4f9c-9aaa-9ca91b2dce75" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="Aggregator Master Flow Reference" doc:id="199b6488-1752-454d-a67d-3f5814d5fb59" name="aggregator-platform-metrics-master-flow" />
+        <ee:transform doc:name="Transform Message" doc:id="b8bb7c92-f821-4627-8849-73beb16648fe">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var apiId = vars."api-id" as Number
+---
+flatten((vars.data.instances map ((item, index) -> item filter ((item1, index) -> item1.id == apiId))) filter ((item, index) -> item != []))]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <ee:transform doc:name="Final Transformation" doc:id="d8d4bb7b-c90a-47a2-8fdc-363476b4cfe9">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map ((item, index) -> {"instances": item} ++ vars.clientApps ++ {
+    "ownerName": vars.exchangeOwnerName.ownerName joinBy ""
+} ++ {
+    "squad": vars.exchangeOwnerName.squad joinBy ""
+}  ++ {
+    "managerName": vars.exchangeOwnerName.managerName joinBy ""
+})]]></ee:set-payload>
+            </ee:message>
+            <ee:variables />
+        </ee:transform>
+    </flow>
+    <flow name="get:\connector-version\application-connectors-update\(appName):mule-admin-api-config">
+        <ee:transform doc:name="appName" doc:id="1d21d50f-5df5-46c0-a106-0aa34cc87e06">
+            <ee:variables>
+                <ee:set-variable variableName="appName"><![CDATA[attributes.uriParams.'appName']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="886998b5-a7f6-4d6b-b33b-9479cf4c0acc">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="5ac78ae4-a4c2-49cd-af11-e9b0b9f042b2" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="update-all-connectors-in-a-project-flow" doc:id="94bfad4b-fa40-4243-9983-bf6a1c1c02db" name="update-all-connectors-in-a-project-flow" />
+    </flow>
+    <flow name="get:\connector-version\application-connector-update\(appName)\(connectorName):mule-admin-api-config">
+        <ee:transform doc:name="connectorName, appName" doc:id="ee0f82a3-3089-41c0-8a88-2f6b194a4b72">
+            <ee:variables>
+                <ee:set-variable variableName="appName"><![CDATA[attributes.uriParams.'appName']]></ee:set-variable>
+                <ee:set-variable variableName="connectorName"><![CDATA[attributes.uriParams.'connectorName']]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="414ec51f-9670-4ba5-af7f-8973773d40ba">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="5dc469dc-0bdd-40c9-a266-4ce091c1b20b" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="update-single-connector-in-a-project-flow" doc:id="1e1c5c0a-edd5-472f-a584-3e0b650cf081" name="update-single-connector-in-a-project-flow" />
+    </flow>
+    <flow name="get:\platform-metrics\runtime-manager\application-details:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="d78b1ae8-7b8d-453e-b9af-7df5e899f905">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.envName]]></ee:set-variable>
+                <ee:set-variable variableName="appName"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.appName as String]]></ee:set-variable>
+                <ee:set-variable variableName="status"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"arm"]]></ee:set-variable>
+                <ee:set-variable variableName="ownerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="fa26b2ff-f080-4eca-87d1-563f307c247c">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <set-variable value="#[{}]" doc:name="listOfApplications" doc:id="157f95af-bfba-4a37-96a4-553691b15b98" variableName="listOfApplications" />
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="2708f0a2-5c0a-4c65-bc3a-22d09e8d49dd" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="Aggregator Master Flow Reference" doc:id="d05e1ff9-9dab-4e7b-826a-45586e55c1d9" name="aggregator-platform-metrics-master-flow" />
+        <ee:transform doc:name="Final Transformation" doc:id="a7426502-775b-42c0-b5fc-d5e1c5c1c911">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\platform-metrics\runtime-manager\download-application:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="e786f483-4177-4b9b-959c-a5a9e1563012">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.envName]]></ee:set-variable>
+                <ee:set-variable variableName="appName"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.appName as String]]></ee:set-variable>
+                <ee:set-variable variableName="status"><![CDATA[%dw 2.0
+output application/java
+---
+"download"]]></ee:set-variable>
+                <ee:set-variable variableName="statusCode"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"arm"]]></ee:set-variable>
+                <ee:set-variable variableName="download"><![CDATA[%dw 2.0
+output application/json
+---
+"download"]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="8367af7c-9549-4b29-a777-576a3fad65cb">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="07eb5328-75ec-45af-a482-03dd3944be39" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="Aggregator Master Flow Reference" doc:id="4b096d29-1ba1-4225-8083-1f70bf3cfe5b" name="aggregator-platform-metrics-master-flow" />
+        <ee:transform doc:name="httpStatus" doc:id="41dcffbf-d6f8-4407-b7c6-dd52c79fcb5c">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus"><![CDATA[%dw 2.0
+output application/json
+var statusCode = vars.statusCode
+---
+if(statusCode contains "200") "200" else "404"]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Final Transformation" doc:id="a7a0a713-ced6-4741-96d6-82b280adb786">
+            <ee:message>
+                <ee:set-payload><![CDATA[if(vars.httpStatus == "200") vars.finalOutput else vars.error]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\platform-metrics\runtime-manager\runtime-vcore-allocation:mule-admin-api-config" doc:id="23b8eff7-8eeb-4003-9e47-acbf3e270a4d">
+        <ee:transform doc:name="Setting Vars" doc:id="b5c3a49b-94be-43a7-b28f-5cf5b4f3a5d6">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="appName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="status"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"arm"]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ownerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ch2Apps"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="e2613455-42b0-47dd-9a7a-7e494dc09c01">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <set-variable value="#[{}]" doc:name="listOfApplications" doc:id="25951752-4404-4b53-b8db-fcbb4f16b208" variableName="listOfApplications" />
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="f13ad375-9c83-4f45-8174-495ca5bec4d5" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="Aggregator Master Flow Reference" doc:id="5267f7ff-f391-49b7-a24b-950887d2fd4b" name="aggregator-platform-metrics-master-flow" />
+        <ee:transform doc:name="Final Transformation" doc:id="7dccad4b-1802-4598-9b03-5d3a448fb84d">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var bg = payload map $.businessGroup distinctBy ((item, index) -> item)
+var env = payload map $.environment distinctBy ((item, index) -> item)
+---
+{   
+    businessGroups: (bg map
+{
+    businessGroup: $,
+    environments: env map((it) ->
+    {
+        environment: it,
+        total_vcores_used:
+            payload filter ((api) ->
+                ($ contains api.businessGroup)
+                and (it contains api.environment)
+                and (api.status == "STARTED" or api.status == "RUNNING")
+            ) reduce ((api, acc = 0) -> acc + (api.sizeOfWorkers * api.numberOfWorkers)),
+ 
+        apis: payload filter ((api,index) ->
+            ($ contains api.businessGroup)
+            and (it contains api.environment)
+        ) map ((item, index) ->
+            {
+                api_name: item.appName,
+                ownerName: item.ownerName,
+                managerName: item.managerName,
+                target: item.target,
+                runtimeVersion: item.runtimeVersion,
+                sizeOfWorkers: item.sizeOfWorkers,
+                numberOfWorkers: item.numberOfWorkers,
+                status: item.status,
+                squad: item.squad
+            })
+    }) filter ((item, index) -> item.environment != "SIT" or item.apis != [])
+})
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="4cb3294b-777e-44c7-abc9-f51e38cf4f1e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+
+var data = vars.vCoresProduction
+
+fun getVcoreField(group, env) =
+  if (upper(env) == "PROD") 
+    { vCoresProductionAssigned: (data filter (d) -> lower(d.org) == lower(group))[0].vCoresProduction }
+  else 
+    { vCoresNonProductionAssigned: (data filter (d) -> lower(d.org) == lower(group))[0].vCoresNonProduction }
+
+---
+{
+  businessGroups: payload.businessGroups map (bg) -> {
+    businessGroup: bg.businessGroup,
+    environments: bg.environments map (env) -> 
+      env ++ getVcoreField(bg.businessGroup, env.environment)
+  }
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+    <flow name="get:\platform-metrics\full-report:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="70a67a3d-2d47-456b-acf6-358a330619db">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="managerName"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.managerName]]></ee:set-variable>
+                <ee:set-variable variableName="email"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.email]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.controlPlane]]></ee:set-variable>
+                <ee:set-variable variableName="owner-name"><![CDATA[%dw 2.0
+output application/java
+---
+attributes.queryParams.ownerName]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <flow-ref doc:name="full-reportFlow" doc:id="4f0df938-0ae8-488d-b72b-58b96eaa4964" name="full-reportFlow" />
+    </flow>
+    <flow name="get:\platform-metrics\object_store-V2\business_group_usage:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="95b431b9-b5fa-4682-b838-b8104f991d99">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="appName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="status"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"object-store"]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ownerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ch2Apps"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="startDate"><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.startDate]]></ee:set-variable>
+                <ee:set-variable variableName="endDate"><![CDATA[%dw 2.0
+output application/json
+---
+(now() splitBy "T")[0]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="50dd99ff-a10f-4854-84fd-cd2878d713ea">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="d4347396-7333-40a8-9621-23433383bfdf" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="business_group_usageFlow" doc:id="c2aa44ed-9830-4577-9a63-8bea12c03841" name="business_group_usageFlow" />
+        <ee:transform doc:name="Final Transformation" doc:id="e3379205-aa95-4214-8631-17ca4634a40b">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload filter (item) -> item."objectStore-stats" is Array]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\platform-metrics\object_store-V2\environment_usage:mule-admin-api-config">
+        <ee:transform doc:name="Setting Vars" doc:id="a0e5cd9f-6b61-4388-9ea0-fd700307ec0c">
+            <ee:message />
+            <ee:variables>
+                <ee:set-variable variableName="startDate"><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.startDate]]></ee:set-variable>
+                <ee:set-variable variableName="envName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="appName"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="status"><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+                <ee:set-variable variableName="controlPlane"><![CDATA[%dw 2.0
+output application/json
+---
+"object-store"]]></ee:set-variable>
+                <ee:set-variable variableName="exchangeOwnerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ownerName"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="ch2Apps"><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+                <ee:set-variable variableName="endDate"><![CDATA[%dw 2.0
+output application/json
+---
+(now() splitBy "T")[0]]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <ee:transform doc:name="Setting Attribute Headers" doc:id="b0ef8b0c-3468-4ff0-8c03-74b55f4ce4f7">
+            <ee:message>
+                <ee:set-attributes><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+            </ee:message>
+        </ee:transform>
+        <flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="03ecd93b-a356-436d-8fb6-05507b8223cd" name="common-set-auth-vars-from-headers" />
+        <flow-ref doc:name="environment_objectStore_usage" doc:id="2c92b438-1494-4ae7-8ce5-33b43a057311" name="environment_objectStore_usage" />
+        <ee:transform doc:name="Final Transformation" doc:id="d7f67b6a-a3e0-4310-a6f6-986d4907148b">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.Data]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+    <flow name="get:\platform-metrics\anypointMQStats:mule-admin-api-config">
+		<ee:transform doc:name="Setting Vars" doc:id="b7d4335c-2db8-4be0-a6e3-be61a85e33c0" >
+			<ee:message />
+			<ee:variables >
+				<ee:set-variable variableName="startDate" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.startDate]]></ee:set-variable>
+				<ee:set-variable variableName="envName" ><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+				<ee:set-variable variableName="appName" ><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+				<ee:set-variable variableName="status" ><![CDATA[%dw 2.0
+output application/java
+---
+null]]></ee:set-variable>
+				<ee:set-variable variableName="controlPlane" ><![CDATA[%dw 2.0
+output application/json
+---
+"anypointMQ"]]></ee:set-variable>
+				<ee:set-variable variableName="exchangeOwnerName" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="ownerName" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="ch2Apps" ><![CDATA[%dw 2.0
+output application/java
+---
+[]]]></ee:set-variable>
+				<ee:set-variable variableName="endDate" ><![CDATA[%dw 2.0
+output application/json
+---
+now()]]></ee:set-variable>
+				<ee:set-variable variableName="period" ><![CDATA[%dw 2.0
+output application/json
+---
+attributes.queryParams.period]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<ee:transform doc:name="Setting Attribute Headers" doc:id="a61cf2e6-8daa-4ac7-a159-825f38461d23" >
+			<ee:message >
+				<ee:set-attributes ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	headers:
+	{
+		"x-anypnt-client-id": p('secure::anypoint.platform.X-ANYPNT-CLIENT-ID'),
+		"x-anypnt-client-secret": p('secure::anypoint.platform.X-ANYPNT-CLIENT-SECRET'),
+		"x-anypnt-org-id": p('secure::anypoint.platform.X-ANYPNT-ORG-ID')
+	}
+}]]></ee:set-attributes>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Set Auth Vars from Headers Flow Reference" doc:id="1ccd605b-0f9d-4a87-afcf-80a4b9640c56" name="common-set-auth-vars-from-headers" />
+		<flow-ref doc:name="anypointMQ_statsFlow" doc:id="2b097bc4-6164-41b8-9edb-9c82234ccff8" name="anypointMQ_statsFlow" />
+		<ee:transform doc:name="Final Transformation" doc:id="cda52afc-861a-4e79-acba-691853c3b01d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+vars.Data]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    </flow>
+</mule>

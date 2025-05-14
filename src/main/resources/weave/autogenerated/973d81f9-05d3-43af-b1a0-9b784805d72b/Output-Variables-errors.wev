@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_973d81f9_05d3_43af_b1a0_9b784805d72b_Output_Variables_errors = Array<Nothing>
+

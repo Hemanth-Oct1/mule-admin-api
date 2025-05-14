@@ -1,0 +1,10 @@
+%dw 2.0
+
+type auto_936c55ab_1ba9_41e6_8f54_c1305eed0833_Input_Attributes = {|
+  headers: {|
+    "x-anypnt-client-id": String, 
+    "x-anypnt-client-secret": String, 
+    "x-anypnt-org-id": String
+  |}
+|}
+

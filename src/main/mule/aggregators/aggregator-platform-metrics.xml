@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+ 
+ 	<flow name="aggregator-platform-metrics-master-flow" doc:id="eb1775ef-293a-4d3a-a850-a2b1d40dcb16" >
+		<ee:transform doc:name="Set Date and Error Variables" doc:id="a67892a4-a368-4875-b8b0-cddc6db4a09b" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable resource="dw/aggregation/set-date-var.dwl" variableName="date" />
+				<ee:set-variable resource="dw/aggregation/set-errors-var.dwl" variableName="errors" />
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Get Token Flow Reference" doc:id="37f75167-2cdd-44cb-b99a-3ef2457f3180" name="api-call-coreservices-login-flow" target="token" targetValue="#[payload.access_token]" />
+		<flow-ref doc:name="CoreServices - Get Organizations" doc:id="16aa7c72-eb07-4562-b5ff-4844fb287b47" name="api-call-coreservices-organizations-flow"/>
+		<ee:transform doc:name="Build Organizations including master org" doc:id="b250e126-1d95-45a7-8dfe-523a572807b1" >
+			<ee:message >
+				<ee:set-payload resource="dw/aggregation/build-orgs-aggregation.dwl" />
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="vCoresProduction" ><![CDATA[%dw 2.0
+output application/json
+---
+[]]]></ee:set-variable>
+			</ee:variables>
+		
+</ee:transform>
+		<foreach doc:name="For Each" doc:id="bd8b4083-1a93-49ad-9d50-91ef95f388e3" collection="#[%dw 2.0&#10;output application/json&#10;var data = Mule::p('secure::anypoint.platform.X-ANYPNT-BUS-ID') &#10;var idsToFilter = data splitBy &quot;'&quot; filter ((item) -&gt; sizeOf(item) &gt;= 5)&#10;---&#10;if(vars.controlPlane == &quot;anypointMQ&quot;) payload filter ((item) -&gt; idsToFilter contains item.id) else payload]">
+			<ee:transform doc:name="Set Org Id, Name and Entitlements Vars" doc:id="5aa60a60-fa15-413d-8910-94bd37cec4ee">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable resource="dw/aggregation/set-org-id-var.dwl" variableName="orgId" />
+					<ee:set-variable resource="dw/aggregation/set-org-name-var.dwl" variableName="orgName" />
+					<ee:set-variable resource="dw/aggregation/set-entitlements-var.dwl" variableName="entitlements" />
+				</ee:variables>
+			</ee:transform>
+			<ee:transform doc:name="Transform Message" doc:id="204b815b-aa6a-4687-b924-8eb11df8a40d" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="vCoresProduction" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.vCoresProduction + {
+	"org": vars.orgName,
+	"vCoresProduction": vars.entitlements.vCoresProduction.assigned,
+	"vCoresNonProduction": vars.entitlements.vCoresSandbox.assigned
+}]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<logger level="INFO" doc:name="Log - Aggregate metrics" doc:id="98fbd6c2-31a0-4ee6-a535-5ff7b8208596" message="Aggregating metrics from the OrgId: #[vars.orgId]" />
+			<flow-ref doc:name="aggregator-platform-metrics-environmentsFlow" doc:id="ebe4bf8b-c484-49c4-bccb-cd5cb584a831" name="aggregator-platform-metrics-environmentsFlow"/>
+			<choice doc:name="Choice" doc:id="f2d0591e-b66f-46da-ae35-5486bb2e79ae" >
+				<when expression='#[vars."controlPlane" == "APIManager" or vars."controlPlane" == "arm"]'>
+					<flow-ref doc:name="Aggregator Organization Flow Reference" doc:id="e3c51083-1549-4479-8873-117f2ddc9003" name="aggregator-platform-metrics-org-flow" />
+				</when>
+				<otherwise>
+					<flow-ref doc:name="api-call-api-manager-client-applications" doc:id="b2db057a-aa44-4c91-b2d8-8fb36f6dbb9b" name="api-call-api-manager-client-applications" />
+				</otherwise>
+			</choice>
+			<choice doc:name="Choice" doc:id="8662242f-3b80-476c-b878-4acb0555485a" >
+				<when expression='#[vars.download != "download"]'>
+					<flow-ref doc:name="api-call-exchange-detailsFlow" doc:id="cc4dd8f3-9329-43b2-aed8-9d85efe6e2a9" name="api-call-exchange-detailsFlow" />
+				</when>
+			</choice>
+		</foreach>
+		<ee:transform doc:name="Transform Message" doc:id="2839fcc1-5c34-4938-8f52-6a0bc36647d1">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if(vars.listOfApplications == {}) [] else vars.listOfApplications filter ($ !={})
+// map
+//{
+//    appName: $.domain,
+//    environment: $.envName,
+//    runtimeVersion: $.muleVersion.version,
+//    numberOfWorkers: $.workers."type".weight,
+//    sizeOfWorkers: $.workers."type".memory,
+//    status: $.status
+//} filter ($.appName !=null)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="b6e2db36-5f45-44ff-aba9-af2324221d1f" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+var data = vars.exchangeOwnerName
+---
+payload map ((item, index) -> item ++ {ownerName: (data filter (owner) -> owner.appName == item.appName).ownerName[0]} ++ {squad: (data filter (squad) -> squad.appName == item.appName).squad[0]} ++ {managerName: (data filter (squad) -> squad.appName == item.appName).managerName[0]})]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	
+</flow>
+	
+	<flow name="aggregator-platform-metrics-environmentsFlow" doc:id="f304c2a4-adf2-4a77-8777-3c681e3889a3" >
+		<try doc:name="Try" doc:id="2f4332b3-b6ef-4040-8d31-dd478f2d3d79">
+			<flow-ref doc:name="CoreServices - Get Environments" doc:id="21d5ad77-7053-4976-bce4-73127d813994" name="api-call-coreservices-environments-flow" target="environments" targetValue='#[payload.data filter ($."type" != "design")]' />
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="ec6beefc-4b8f-4e3e-be37-7d0fc6c06470">
+					<logger level="INFO" doc:name="Logger" doc:id="23bcee64-fed9-4a13-b579-a8c9a93ad32b" message="Getting environments failed" />
+					<set-variable value="#[vars.errors + error.description]" doc:name="Set Variable" doc:id="c4e8a398-0aef-4722-99db-0c2019e2d2ec" variableName="errors" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<ee:transform doc:name="Environment Details" doc:id="07a92e1c-ee64-4e46-b9a7-701f9d533b9c">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.environments]]></ee:set-payload>
+			</ee:message>
+			<ee:variables>
+			</ee:variables>
+		</ee:transform>
+		<set-variable value="#[%dw 2.0&#10;output application/json&#10;var envName = vars.envName&#10;var data = payload filter ((item, index) -&gt; item.name == envName)&#10;---&#10;data.id[0]]" doc:name="envId" doc:id="0033033f-cc99-4ea2-9228-f85703e89497" variableName="envId" />
+		<choice doc:name="Choice" doc:id="e009d1dc-f145-4e59-99c0-3f3353d78727" >
+			<when expression='#[vars.controlPlane != "object-store"]'>
+				<ee:transform doc:name="Filter Environments" doc:id="3018ecae-df3c-4c94-807c-1b69a7f4f69a">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="environments"><![CDATA[%dw 2.0
+output application/json
+var data2 = Mule::p('secure::anypoint.platform.X-ANYPNT-ENV-ID')
+var idsToFilter = data2 splitBy "'" filter ((item) -> sizeOf(item) >= 5)
+var appName = vars.appName
+var envName = vars.envName
+var data = payload filter ((item, index) -> item.name == envName)
+---
+if(vars.controlPlane == "anypointMQ") if(envName == null) payload filter ((item) -> idsToFilter contains item.id) else data else payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+			</when>
+		</choice>
+	</flow>
+	<flow name="aggregator-platform-metrics-org-flow" doc:id="d4eccc5d-3dcf-403a-8391-d67993c74af9">
+		<foreach doc:name="For Each" doc:id="acaaf86c-7c79-45dd-959c-394d98dbeb80" collection="#[vars.environments]">
+			<choice doc:name="Choice" doc:id="d42f8660-d9f8-4f86-98c5-36ad0b809d06">
+			<when expression='#[vars.controlPlane == "arm"]' >
+					<set-variable value="#[payload.name]" doc:name="environmentName" doc:id="f57fea35-1f8e-43c7-b87c-ace5a52415a3" variableName="environmentName"/>
+					<flow-ref doc:name="api-call-cloudhub-apps-flow" doc:id="f8313780-37fd-413a-84b4-eb31747c8616" name="api-call-cloudhub-apps-flow"/>
+					<remove-variable doc:name="Remove environmentName" doc:id="bac3fff7-2cdd-423d-b57c-0915b949c875" variableName="environmentName"/>
+				</when>
+				<when expression='#[vars.controlPlane == "APIManager"]'>
+					<set-variable value="#[payload.name]" doc:name="environmentName" doc:id="abbff283-256a-4e47-af02-69dcdfeadacb" variableName="environmentName" />
+					<set-variable value="#[payload.id]" doc:name="envId" doc:id="ebf139f8-6969-41b8-b1c6-5b436690dcd8" variableName="envId"/>
+					<flow-ref doc:name="api-detailsFlow" doc:id="764458f3-5955-47f2-84e8-6f93f95216b1" name="api-detailsFlow"/>
+					<remove-variable doc:name="Remove environmentName" doc:id="e992980b-3c69-4e8e-ade2-542d5085bcfd" variableName="environmentName" />
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="9850ac73-f719-4c85-8557-9ccefdf104a4" message='"Payload is empty. Skipping processing."'/>
+					<set-payload value='#[{ "status": "No data to process" }]' doc:name="Set Payload" doc:id="db5244a1-7a3c-413c-a554-19cbcc29d5b8" />
+				</otherwise>
+		</choice>
+		</foreach>
+	
+</flow>
+
+
+</mule>
