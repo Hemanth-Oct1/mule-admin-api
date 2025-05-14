@@ -65,7 +65,7 @@ jobs:
           mvn deploy --settings .maven/settings.xml -DskipMunitTests -DmuleDeploy \
           -Dapp.runtime=4.4.0 \
           -Denv=Dev \
-          -Dappname=CICD \
+          -Dappname=cicd-demo \
           -Danypoint.businessGroup="${{ secrets.Business_Group_Id }}" \
           -Danypoint.platform.client_id="${{ secrets.CLIENT_ID }}" \
           -Danypoint.platform.client_secret="${{ secrets.CLIENT_SECRET }}" \
