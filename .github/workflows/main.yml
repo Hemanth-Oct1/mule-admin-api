@@ -31,7 +31,12 @@ jobs:
       - name: Build with Maven
         run: mvn clean package
 
-      
+      - name: Upload artifact 
+        uses: actions/upload-artifact@v3.1.3
+        with:
+          name: artifacts
+          path: target/*.jar
+
         
   deploy:
     needs: build
