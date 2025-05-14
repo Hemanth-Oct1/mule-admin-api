@@ -31,28 +31,35 @@ jobs:
           -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
           -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}"
   
-  deploydev:
+    deploydev:
     needs: build
     runs-on: ubuntu-latest
     environment: dev
-    steps:    
-    - name: Checkout this repo
-      uses: actions/checkout@v4
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-       
-    - name: Deploy to dev
-      run: |
-        mvn deploy --settings .maven/settings.xml -DskipMunitTests -DmuleDeploy \
-        -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
-        -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}" \
-        -Denv=Dev \
-        -Dappname=CICD \
-        -Danypoint.businessGroup="${{ secrets.Business_Group_Id }}" \
-        -Danypoint.platform.client_id="${{secrets.CLIENT_ID}}" \
-        -Danypoint.platform.client_secret="${{secrets.CLIENT_SECRET}}" 
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: List artifacts
+        run: ls -al target
+
+      - name: Deploy to dev
+        run: |
+          mvn deploy --settings .maven/settings.xml -DskipMunitTests -DmuleDeploy \
+          -Dapp.runtime=4.4.0 \
+          -Denv=Dev \
+          -Dappname=CICD \
+          -Danypoint.businessGroup="${{ secrets.Business_Group_Id }}" \
+          -Danypoint.platform.client_id="${{ secrets.CLIENT_ID }}" \
+          -Danypoint.platform.client_secret="${{ secrets.CLIENT_SECRET }}" \
+          -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
+          -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}"
+
        
